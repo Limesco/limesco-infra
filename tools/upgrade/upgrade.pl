@@ -62,7 +62,21 @@ Utility method. Asks the question until yes or no was answered, then returns 1 i
 
 =cut
 
-sub ask_confirmation {}
+sub ask_confirmation {
+	my ($question) = @_;
+	while(1) {
+		print $question . "\nYes or no? [yn] ";
+		my $answer = lc(<STDIN>);
+		1 while chomp $answer;
+		if($answer eq "y" || $answer eq "yes") {
+			return 1;
+		} elsif($answer eq "n" || $answer eq "no") {
+			return 0;
+		} else {
+			print "Incomprehensible reply. Try again.\n\n";
+		}
+	}
+}
 
 =head3 initialize_database()
 
