@@ -52,7 +52,9 @@ Returns the latest schema version supported by this tool.
 
 =cut
 
-sub get_latest_schema_version {}
+sub get_latest_schema_version {
+	return 1;
+}
 
 =head3 ask_confirmation($question)
 
