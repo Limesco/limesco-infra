@@ -1,0 +1,44 @@
+This is the liminfra distribution, Limesco's production software. Read the
+INSTALL file for installation instructions. This file explains how development
+of liminfra is done.
+
+This distribution is divided in four directories:
+* tools, which contains all tools and applications
+* daemons, which contains long-running daemons (currently empty)
+* lib, which contains the code shared between all tools and daemons
+* t, tests for the code in the lib directory (currently empty)
+
+The naming convention of tools depends on the object they work on; if there is
+one, the tool is called ${object}-${action}, e.g. account-modify (also for
+account creation). If there is none, it is simply called like its action, e.g.
+upgrade.
+
+Every tool consists of a Perl file (.pl), which is built up from a set of
+functions and a "caller-block":
+
+	if(caller) {
+		...runner code...
+	}
+	sub function {
+		...function code...
+	}
+
+The code inside the caller block is run when the .pl file is directly
+executed. The code can use the functions in the rest of the file. It can
+also use the library functions if it includes them beforehand as follows:
+
+	use lib 'lib';
+	use lib '../lib';
+	use lib '../../lib';
+	use Limesco;
+
+When run without arguments, tools are expected to either do a simple job or
+explain how to correctly call them. If they are called with --help as one of
+the arguments, they should explain how they are used. If they have dangerous
+side effects, they should ask whether it is OK to continue in the caller block.
+
+All tools are accompanied by a test file (.t), which sources the .pl file and
+therefore does not run the caller-block. This allows it to test all functions.
+They can use Test::PostgreSQL and Limesco->new_for_test($pgsql->dsn) to create
+a Limesco object to use for the tools' functions. See the existing tests, for
+example those of the upgrade tool, for examples.
