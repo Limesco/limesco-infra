@@ -1,0 +1,30 @@
+To generate a Makefile, run:
+
+	$ perl Makefile.PL
+
+This will also warn you of any missing modules, so make sure to read the
+output.
+
+Then, to run the tests:
+
+	$ make
+	$ make test
+
+If the tests were succesful, install:
+
+	$ sudo make install
+
+This distribution uses PostgreSQL; to create a user and database, switch to
+the UNIX user running PostgreSQL and run (substituting $USERNAME with the
+user you're going to use for development or production):
+
+	$ createuser $USERNAME
+	$ createdb -O $USERNAME liminfra
+
+This should allow you to run "psql liminfra" as the given $USERNAME and get
+to the empty liminfra database. Now, run the upgrade tool:
+
+	$ upgrade.pl
+
+This will initialize your database so you can get started. Read the DEVELOPMENT
+file for more information on developing liminfra.
