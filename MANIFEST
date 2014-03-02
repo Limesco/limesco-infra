@@ -1,0 +1,12 @@
+# Update this file with "make manifest"
+.dazeus-channel
+DEVELOPMENT
+INSTALL
+lib/Limesco.pm
+Makefile.PL
+MANIFEST
+test.pl
+tools/cservimporter/cservimporter.pl
+tools/cservimporter/cservimporter.t
+tools/upgrade/upgrade.pl
+tools/upgrade/upgrade.t
