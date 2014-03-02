@@ -1,0 +1,10 @@
+; Copy this file to /etc/limesco.conf or use the -c flag
+
+[database]
+; host=
+; port=
+; username=
+; password=
+; options=
+database=liminfra
+

@@ -21,8 +21,10 @@ user you're going to use for development or production):
 	$ createuser $USERNAME
 	$ createdb -O $USERNAME liminfra
 
-This should allow you to run "psql liminfra" as the given $USERNAME and get
-to the empty liminfra database. Now, run the upgrade tool:
+This should allow you to run "psql liminfra" as the given $USERNAME and get to
+the empty liminfra database. To tell the code distribution how to access the
+database, copy the limesco.conf.sample file to /etc/limesco.conf and modify it
+if needed. Then, run the upgrade tool:
 
 	$ upgrade.pl
 
