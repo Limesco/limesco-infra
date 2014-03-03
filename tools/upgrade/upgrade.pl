@@ -155,12 +155,51 @@ sub initialize_database {
 		$dbh->begin_work();
 		# Disable CREATE TABLE notices for this transaction only
 		$dbh->do("SET LOCAL client_min_messages='WARNING';");
-		$dbh->do("CREATE TABLE meta (".
-			"period DATERANGE,".
-			"schema_version INT,".
-			"EXCLUDE USING gist (period WITH &&)".
-			")");
+
+		$dbh->do("CREATE EXTENSION IF NOT EXISTS btree_gist;");
+
+		$dbh->do("CREATE TABLE meta (
+			period DATERANGE,
+			schema_version INT,
+			EXCLUDE USING gist (period WITH &&)
+		);");
 		$dbh->do("INSERT INTO meta (period, schema_version) values ('[today,)', ?)", undef, get_latest_schema_version());
+
+		# A domain AS TEXT CONSTRAINT max_length is the fastest to
+		# insert, fastest to search through, and fastest to change the
+		# length constraint. We place a CONSTRAINT on our database
+		# mostly to prevent these text from becoming insanely large.
+		# See benchmark: http://www.depesz.com/2010/03/02/charx-vs-varcharx-vs-varchar-vs-text/
+		$dbh->do("CREATE DOMAIN shorttext AS TEXT CONSTRAINT max_length CHECK (LENGTH(VALUE) <= 100);");
+		$dbh->do("CREATE TYPE accountstate AS ENUM('UNPAID', 'UNCONFIRMED', 'CONFIRMATION_REQUESTED', 'CONFIRMED', 'DEACTIVATED');");
+
+		$dbh->do("CREATE SEQUENCE account_id_seq;");
+
+		$dbh->do("CREATE TABLE account (
+			id INTEGER,
+			period DATERANGE,
+			first_name SHORTTEXT,
+			last_name SHORTTEXT,
+			street_address SHORTTEXT,
+			postal_code SHORTTEXT,
+			city SHORTTEXT,
+			email SHORTTEXT,
+			password_hash SHORTTEXT NULL,
+			admin BOOLEAN,
+			state ACCOUNTSTATE,
+			PRIMARY KEY (id, period),
+			EXCLUDE USING gist (id WITH =, period WITH &&)
+		);");
+
+		$dbh->do("CREATE TABLE speakupAccount (
+			name SHORTTEXT,
+			period DATERANGE,
+			account_id INTEGER NULL,
+			PRIMARY KEY (name, period),
+			EXCLUDE USING gist (name WITH =, period WITH &&),
+			EXCLUDE USING gist (account_id WITH =, period WITH &&)
+		);");
+
 		return $dbh->commit();
 	} catch {
 		$dbh->rollback();
