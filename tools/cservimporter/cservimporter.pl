@@ -135,14 +135,71 @@ sub import_accounts {
 	return \%accounts_map;
 }
 
-=head3 import_sims($database)
+=head3 import_sims($lim, $database, $dbh, $accounts_map)
 
-Import the sims from Mongo to Liminfra.
+Import the SIMs from Mongo to Liminfra. The given database is a
+MongoDB::Database pointing at CServ's database; the given dbh is a DBI handle
+pointing at liminfra's database. The dbh must be in transaction state and
+should have an exclusive lock on the 'sim' table. The accounts_map is a hashref
+containing CServ account ID's as keys and liminfra account ID's as values.
 
 =cut
 
 sub import_sims {
-	my ($database) = @_;
+	my ($lim, $database, $dbh, $accounts_map) = @_;
+	my $collection = $database->get_collection("sims");
+
+	verify_table_empty($dbh, "sim");
+	verify_table_empty($dbh, "phonenumber");
+
+	my $cursor = $collection->find();
+	while(my $sim = $cursor->next) {
+		my $iccid = $sim->{'_id'};
+		my $puk = $sim->{'puk'};
+		my $state = $sim->{'state'};
+		if($state eq "STOCK") {
+			$dbh->do("INSERT INTO sim (iccid, period, puk, state) VALUES (?, '[today,)', ?, 'STOCK')", undef, $iccid, $puk);
+			next;
+		}
+
+		my $mongo_account_id = $sim->{'ownerAccountId'};
+		my $account_id = $accounts_map->{$mongo_account_id};
+
+		$sim->{'sipSettings'} = {} if(!$sim->{'sipSettings'});
+
+		my $lastMonthlyFeesInvoice;
+		my $lastMonthlyFeesDate;
+		if($sim->{'lastMonthlyFeesInvoice'}) {
+			my $lastMonthlyFeesYear = $sim->{'lastMonthlyFeesInvoice'}{'year'};
+			my $lastMonthlyFeesMonth = $sim->{'lastMonthlyFeesInvoice'}{'month'};
+			$lastMonthlyFeesInvoice = $sim->{'lastMonthlyFeesInvoice'}{'invoiceId'};
+			$lastMonthlyFeesDate = sprintf("%04d-%02d-01", $lastMonthlyFeesYear, $lastMonthlyFeesMonth + 1);
+		}
+
+		my $sth = $dbh->prepare("INSERT INTO sim (iccid, period, state, puk, owner_account_id, data_type,
+			exempt_from_cost_contribution, porting_state, activation_invoice_id, last_monthly_fees_invoice_id,
+			last_monthly_fees_month, call_connectivity_type, sip_realm, sip_username, sip_authentication_username,
+			sip_password, sip_uri, sip_expiry, sip_trunk_password) VALUES (?, '[today,)', ?, ?, ?, ?,
+			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+
+		my @sipSettings;
+		for(qw(realm username authenticationUsername password uri expiry speakupTrunkPassword)) {
+			push @sipSettings, $sim->{'sipSettings'}{$_};
+		}
+		$sth->execute($iccid, $state, $puk, $account_id, $sim->{'apnType'}, $sim->{'exemptFromCostContribution'},
+			$sim->{'portingState'}, $sim->{'activationInvoiceId'}, $lastMonthlyFeesInvoice, $lastMonthlyFeesDate,
+			$sim->{'callConnectivityType'}, @sipSettings);
+
+		my $phone = $sim->{'phoneNumber'};
+		if($phone) {
+			$phone =~ s/-//;
+			if($phone =~ /^06(\d+)$/) {
+				$phone = "316$1";
+			}
+			$sth = $dbh->prepare("INSERT INTO phonenumber (phonenumber, period, sim_iccid) VALUES (?, '[today,)', ?)");
+			$sth->execute($phone, $iccid);
+		}
+	}
 }
 
 =head3 import_cdrs($database)
