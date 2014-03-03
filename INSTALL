@@ -14,17 +14,17 @@ If the tests were succesful, install:
 
 	$ sudo make install
 
-This distribution uses PostgreSQL; to create a user and database, switch to
-the UNIX user running PostgreSQL and run (substituting $USERNAME with the
-user you're going to use for development or production):
+This distribution uses PostgreSQL; to give your normal development UNIX user
+access to the server switch to the UNIX user running PostgreSQL and run
+(substituting $USERNAME with your username):
 
 	$ createuser $USERNAME
-	$ createdb -O $USERNAME liminfra
 
-This should allow you to run "psql liminfra" as the given $USERNAME and get to
-the empty liminfra database. To tell the code distribution how to access the
-database, copy the limesco.conf.sample file to /etc/limesco.conf and modify it
-if needed. Then, run the upgrade tool:
+Then, as $USERNAME, you can use createdb and dropdb to create and destroy a
+liminfra database as you see fit. To open a Postgres shell to the empty
+liminfra database, use 'psql liminfra'. To tell the code distribution how to
+access the database, copy the limesco.conf.sample file to /etc/limesco.conf and
+modify it if needed. Then, run the upgrade tool:
 
 	$ upgrade.pl
 
