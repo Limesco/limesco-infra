@@ -171,6 +171,7 @@ sub initialize_database {
 		# mostly to prevent these text from becoming insanely large.
 		# See benchmark: http://www.depesz.com/2010/03/02/charx-vs-varcharx-vs-varchar-vs-text/
 		$dbh->do("CREATE DOMAIN shorttext AS TEXT CONSTRAINT max_length CHECK (LENGTH(VALUE) <= 100);");
+		$dbh->do("CREATE DOMAIN longtext AS TEXT CONSTRAINT max_length CHECK (LENGTH(VALUE) <= 400);");
 		$dbh->do("CREATE TYPE accountstate AS ENUM('UNPAID', 'UNCONFIRMED', 'CONFIRMATION_REQUESTED', 'CONFIRMED', 'DEACTIVATED');");
 
 		$dbh->do("CREATE SEQUENCE account_id_seq;");
@@ -199,6 +200,69 @@ sub initialize_database {
 			EXCLUDE USING gist (name WITH =, period WITH &&),
 			EXCLUDE USING gist (account_id WITH =, period WITH &&)
 		);");
+
+		$dbh->do("CREATE TYPE simstate AS ENUM('STOCK', 'ALLOCATED', 'ACTIVATION_REQUESTED', 'ACTIVATED', 'DISABLED');");
+		$dbh->do("CREATE TYPE simdatatype AS ENUM('APN_NODATA', 'APN_500MB', 'APN_2000MB');");
+		$dbh->do("CREATE TYPE portingstate AS ENUM('NO_PORT', 'WILL_PORT', 'PORT_PENDING', 'PORT_DATE_KNOWN', 'PORTING_COMPLETED');");
+		$dbh->do("CREATE TYPE callconnectivitytype AS ENUM('OOTB', 'DIY');");
+
+		$dbh->do("CREATE TABLE sim (
+			iccid SHORTTEXT NOT NULL,
+			period DATERANGE NOT NULL,
+			state SIMSTATE NOT NULL,
+			puk SHORTTEXT NOT NULL,
+			owner_account_id INTEGER,
+			CHECK (state='STOCK' OR owner_account_id IS NOT NULL),
+			CHECK (state!='STOCK' OR owner_account_id IS NULL),
+			data_type SIMDATATYPE,
+			CHECK (state='STOCK' OR data_type IS NOT NULL),
+			CHECK (state!='STOCK' OR data_type IS NULL),
+			exempt_from_cost_contribution BOOLEAN,
+			CHECK (state='STOCK' OR exempt_from_cost_contribution IS NOT NULL),
+			CHECK (state!='STOCK' OR exempt_from_cost_contribution IS NULL),
+
+			porting_state PORTINGSTATE,
+			CHECK (state='STOCK' OR porting_state IS NOT NULL),
+			CHECK (state!='STOCK' OR porting_state IS NULL),
+			activation_invoice_id SHORTTEXT,
+			CHECK (state!='STOCK' OR activation_invoice_id IS NULL),
+			last_monthly_fees_invoice_id SHORTTEXT,
+			CHECK (state!='STOCK' OR last_monthly_fees_invoice_id IS NULL),
+			last_monthly_fees_month DATE,
+			CHECK (last_monthly_fees_invoice_id IS NULL OR last_monthly_fees_month IS NOT NULL),
+			CHECK (last_monthly_fees_invoice_id IS NOT NULL OR last_monthly_fees_month IS NULL),
+
+			call_connectivity_type CALLCONNECTIVITYTYPE,
+			CHECK (state='STOCK' OR call_connectivity_type IS NOT NULL),
+			CHECK (state!='STOCK' OR call_connectivity_type IS NULL),
+
+			sip_realm SHORTTEXT,
+			CHECK (state!='STOCK' OR sip_realm IS NULL),
+			sip_username SHORTTEXT,
+			CHECK (state!='STOCK' OR sip_username IS NULL),
+			sip_authentication_username SHORTTEXT,
+			CHECK (state!='STOCK' OR sip_authentication_username IS NULL),
+			sip_password SHORTTEXT,
+			CHECK (state!='STOCK' OR sip_password IS NULL),
+			sip_uri LONGTEXT,
+			CHECK (state!='STOCK' OR sip_uri IS NULL),
+			sip_expiry INTEGER,
+			CHECK (state!='STOCK' OR sip_expiry IS NULL),
+			sip_trunk_password SHORTTEXT
+			CHECK (state!='STOCK' OR sip_trunk_password IS NULL),
+
+			PRIMARY KEY (iccid, period),
+			EXCLUDE USING gist (iccid WITH =, period WITH &&)
+		);");
+
+		$dbh->do("CREATE DOMAIN mobilenumber AS TEXT CONSTRAINT numberformat CHECK (LENGTH(VALUE)=11 AND SUBSTRING(VALUE FOR 3)='316')");
+		$dbh->do("CREATE TABLE phonenumber (
+			phonenumber MOBILENUMBER NOT NULL,
+			period DATERANGE NOT NULL,
+			sim_iccid SHORTTEXT NOT NULL,
+			PRIMARY KEY (phonenumber, period),
+			EXCLUDE USING gist (phonenumber WITH =, period WITH &&)
+		)");
 
 		return $dbh->commit();
 	} catch {
