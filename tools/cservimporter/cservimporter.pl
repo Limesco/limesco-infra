@@ -52,12 +52,14 @@ sub import_from_cserv_mongo {
 		$dbh->do("LOCK TABLE invoice IN ACCESS EXCLUSIVE MODE;");
 		$dbh->do("LOCK TABLE invoice_itemline IN ACCESS EXCLUSIVE MODE;");
 		$dbh->do("LOCK TABLE phonenumber IN ACCESS EXCLUSIVE MODE;");
+		$dbh->do("LOCK TABLE pricing IN ACCESS EXCLUSIVE MODE;");
 		$dbh->do("LOCK TABLE sim IN ACCESS EXCLUSIVE MODE;");
 		$dbh->do("LOCK TABLE speakupAccount IN ACCESS EXCLUSIVE MODE;");
 
 		my $accounts_map = import_accounts($lim, $cservdb, $dbh);
 		import_sims($lim, $cservdb, $dbh, $accounts_map);
 		import_invoices($lim, $cservdb, $dbh, $accounts_map);
+		my $pricing_map = import_pricings($lim, $cservdb, $dbh);
 		import_cdrs($lim, $cservdb, $dbh, $accounts_map);
 
 		$dbh->commit;
@@ -89,6 +91,35 @@ sub verify_table_empty {
 	if($sth->fetchrow_arrayref()->[0]) {
 		croak "Will not continue: table $table is not empty";
 	}
+}
+
+=head3 array_to_postgres($arrayref)
+
+Takes a single Perl arrayref and converts it to a Postgres array format, simply
+stringifying its contents. Make sure to only give trusted data to this function
+as the output will not be checked or escaped.
+
+=cut
+
+sub array_to_postgres {
+	my ($arrayref) = @_;
+	if(ref($arrayref) ne "ARRAY") {
+		return;
+	}
+	if(!@$arrayref) {
+		return '[]';
+	}
+	my $r;
+	foreach(@$arrayref) {
+		s/\\/\\\\/g;
+		s/"/\\"/g;
+		if(!defined $r) {
+			$r = $_;
+		} else {
+			$r .= '", "' . $_;
+		}
+	}
+	return '{"' . $r . '"}';
 }
 
 =head3 import_accounts($lim, $database, $dbh)
@@ -260,6 +291,67 @@ sub import_invoices {
 				1, $line->{'taxAmount'}, undef, undef, undef, undef);
 		}
 	}
+}
+
+=head3 import_pricings($lim, $cservdb, $dbh)
+
+Import the pricings from Mongo to Liminfra. The given database is a
+MongoDB::Database pointing at CServ's database; the given dbh is a DBI handle
+pointing at liminfra's database. The dbh must be in transaction state and
+should have an exclusive lock on the 'pricing' table.
+
+This method returns a hashref containing CServ pricing ID's as keys and
+liminfra pricing ID's as values.
+
+=cut
+
+sub import_pricings {
+	my ($lim, $cservdb, $dbh) = @_;
+	my $collection = $cservdb->get_collection("pricing");
+
+	verify_table_empty($dbh, "pricing");
+
+	my %pricing_map;
+
+	my $cursor = $collection->find();
+	while(my $pricing = $cursor->next) {
+		my $id = $pricing->{'_id'}->to_string();
+		my $service = $pricing->{'service'};
+		my $period = '[' . $pricing->{'applicability'}{'validFrom'}->ymd() . ',)';
+		my $cdrt = array_to_postgres($pricing->{'applicability'}{'cdrType'});
+		my $ccv = array_to_postgres($pricing->{'applicability'}{'callConnectivityType'});
+		my $dest = array_to_postgres($pricing->{'applicability'}{'destination'});
+		my $sth = $dbh->prepare("INSERT INTO pricing (period, description, service,
+			hidden, cdrtype, call_connectivity_type, destination, cost_per_line,
+			cost_per_unit, price_per_line, price_per_unit)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+
+		my ($costperline, $costperunit, $priceperline, $priceperunit);
+		if($service eq "voice") {
+			$costperline = $pricing->{'cost'}{'perCall'};
+			$costperunit = $pricing->{'cost'}{'perMinute'} / 60;
+			$priceperline = $pricing->{'price'}{'perCall'};
+			$priceperunit = $pricing->{'price'}{'perMinute'} / 60;
+		} elsif($service eq "sms") {
+			$costperline = $pricing->{'cost'}{'perSms'};
+			$costperunit = 0;
+			$priceperline = $pricing->{'price'}{'perSms'};
+			$priceperunit = 0;
+		} elsif($service eq "data") {
+			$costperline = 0;
+			$costperunit = $pricing->{'cost'}{'perKilobyte'};
+			$priceperline = 0;
+			$priceperunit = $pricing->{'price'}{'perKilobyte'};
+		}
+
+		$sth->execute($period, $pricing->{'description'}, uc($pricing->{'service'}),
+			$pricing->{'hidden'} || "false", $cdrt, $ccv, $dest, $costperline,
+			$costperunit, $priceperline, $priceperunit);
+
+		my $pricing_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "pricing_id_seq"});
+		$pricing_map{$id} = $pricing_id;
+	}
+	return \%pricing_map;
 }
 
 =head3 import_cdrs($database)
