@@ -192,6 +192,8 @@ sub initialize_database {
 			EXCLUDE USING gist (id WITH =, period WITH &&)
 		);");
 
+		$dbh->do("ALTER SEQUENCE account_id_seq OWNED BY account.id;");
+
 		$dbh->do("CREATE TABLE speakupAccount (
 			name SHORTTEXT NOT NULL,
 			period DATERANGE NOT NULL,
