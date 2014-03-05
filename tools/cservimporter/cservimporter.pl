@@ -49,6 +49,7 @@ sub import_from_cserv_mongo {
 	try {
 		$dbh->begin_work;
 		$dbh->do("LOCK TABLE account IN ACCESS EXCLUSIVE MODE;");
+		$dbh->do("LOCK TABLE phonenumber IN ACCESS EXCLUSIVE MODE;");
 		$dbh->do("LOCK TABLE sim IN ACCESS EXCLUSIVE MODE;");
 		$dbh->do("LOCK TABLE speakupAccount IN ACCESS EXCLUSIVE MODE;");
 
@@ -140,8 +141,9 @@ sub import_accounts {
 Import the SIMs from Mongo to Liminfra. The given database is a
 MongoDB::Database pointing at CServ's database; the given dbh is a DBI handle
 pointing at liminfra's database. The dbh must be in transaction state and
-should have an exclusive lock on the 'sim' table. The accounts_map is a hashref
-containing CServ account ID's as keys and liminfra account ID's as values.
+should have an exclusive lock on the 'sim' and 'phonenumber' tables. The
+accounts_map is a hashref containing CServ account ID's as keys and liminfra
+account ID's as values.
 
 =cut
 
