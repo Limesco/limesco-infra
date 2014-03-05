@@ -264,6 +264,50 @@ sub initialize_database {
 			EXCLUDE USING gist (phonenumber WITH =, period WITH &&)
 		)");
 
+		$dbh->do("CREATE TYPE currency AS ENUM('EUR');");
+		$dbh->do("CREATE DOMAIN money2 AS NUMERIC(12, 2);");
+		$dbh->do("CREATE DOMAIN money5 AS NUMERIC(12, 5);");
+		$dbh->do("CREATE TYPE itemlinetype AS ENUM('NORMAL', 'DURATION', 'TAX');");
+		$dbh->do('CREATE DOMAIN invoiceid AS TEXT CHECK(VALUE ~ \'^\d\dC\d{6}$\');');
+
+		$dbh->do("CREATE TABLE invoice (
+			id INVOICEID PRIMARY KEY NOT NULL,
+			account_id INTEGER NOT NULL,
+			currency CURRENCY NOT NULL DEFAULT 'EUR',
+			date DATE NOT NULL,
+			creation_time TIMESTAMP DEFAULT 'now',
+			rounded_without_taxes MONEY2 NOT NULL,
+			rounded_with_taxes MONEY2 NOT NULL
+		);");
+		$dbh->do("CREATE TABLE invoice_itemline (
+			id SERIAL PRIMARY KEY NOT NULL,
+			type ITEMLINETYPE NOT NULL,
+			invoice_id INVOICEID NOT NULL REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+			description LONGTEXT NOT NULL,
+			taxrate MONEY5 NOT NULL,
+			rounded_total MONEY2 NOT NULL,
+
+			item_price MONEY5,
+			CHECK (type = 'DURATION' OR item_price IS NOT NULL),
+			CHECK (type != 'DURATION' OR item_price IS NULL),
+			item_count INTEGER,
+			CHECK (item_price IS NULL OR item_count IS NOT NULL),
+			CHECK (item_price IS NOT NULL OR item_count IS NULL),
+
+			number_of_calls INTEGER,
+			CHECK (type = 'DURATION' OR number_of_calls IS NULL),
+			CHECK (type != 'DURATION' OR number_of_calls IS NOT NULL),
+			number_of_seconds INTEGER,
+			CHECK (number_of_calls IS NULL OR number_of_seconds IS NOT NULL),
+			CHECK (number_of_calls IS NOT NULL OR number_of_seconds IS NULL),
+			price_per_call MONEY5,
+			CHECK (number_of_calls IS NULL OR price_per_call IS NOT NULL),
+			CHECK (number_of_calls IS NOT NULL OR price_per_call IS NULL),
+			price_per_minute MONEY5
+			CHECK (number_of_calls IS NULL OR price_per_minute IS NOT NULL),
+			CHECK (number_of_calls IS NOT NULL OR price_per_minute IS NULL)
+		);");
+
 		return $dbh->commit();
 	} catch {
 		$dbh->rollback();
