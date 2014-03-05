@@ -310,6 +310,34 @@ sub initialize_database {
 			CHECK (number_of_calls IS NOT NULL OR price_per_minute IS NULL)
 		);");
 
+		$dbh->do("CREATE TYPE servicetype AS ENUM('DATA', 'SMS', 'VOICE');");
+		$dbh->do("CREATE TYPE cdrtype AS ENUM('EXT_MOBILE', 'MOBILE_EXT', 'EXT_PBX', 'MOBILE_PBX', 'PBX_MOBILE');");
+		$dbh->do("CREATE TABLE pricing (
+			id SERIAL PRIMARY KEY NOT NULL,
+			period DATERANGE NOT NULL,
+			description LONGTEXT NOT NULL,
+			service SERVICETYPE NOT NULL,
+			hidden BOOLEAN NOT NULL,
+
+			cdrtype CDRTYPE[] NULL,
+			CHECK(service = 'VOICE' OR service = 'SMS' OR cdrtype IS NULL),
+			CHECK(service != 'VOICE' OR cdrtype IS NOT NULL),
+			CHECK(service != 'SMS' OR cdrtype IS NOT NULL),
+
+			call_connectivity_type CALLCONNECTIVITYTYPE[] NULL,
+			CHECK(service = 'VOICE' OR call_connectivity_type IS NULL),
+			CHECK(service != 'VOICE' OR call_connectivity_type IS NOT NULL),
+
+			destination TEXT[] NULL,
+			CHECK(service = 'VOICE' OR destination IS NULL),
+			CHECK(service != 'VOICE' OR destination IS NOT NULL),
+
+			cost_per_line MONEY5 NOT NULL, -- used to be cost.perCall/perSms
+			cost_per_unit MONEY5 NOT NULL, -- used to be cost.perMinute/perKilobyte
+			price_per_line MONEY5 NOT NULL, -- used to be price.perCall/perSms
+			price_per_unit MONEY5 NOT NULL  -- used to be price.perMinute/perKilobyte
+		);");
+
 		return $dbh->commit();
 	} catch {
 		$dbh->rollback();
