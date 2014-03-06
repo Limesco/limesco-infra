@@ -49,6 +49,7 @@ sub import_from_cserv_mongo {
 	try {
 		$dbh->begin_work;
 		$dbh->do("LOCK TABLE account IN ACCESS EXCLUSIVE MODE;");
+		$dbh->do("LOCK TABLE cdr IN ACCESS EXCLUSIVE MODE;");
 		$dbh->do("LOCK TABLE invoice IN ACCESS EXCLUSIVE MODE;");
 		$dbh->do("LOCK TABLE invoice_itemline IN ACCESS EXCLUSIVE MODE;");
 		$dbh->do("LOCK TABLE phonenumber IN ACCESS EXCLUSIVE MODE;");
@@ -60,7 +61,7 @@ sub import_from_cserv_mongo {
 		import_sims($lim, $cservdb, $dbh, $accounts_map);
 		import_invoices($lim, $cservdb, $dbh, $accounts_map);
 		my $pricing_map = import_pricings($lim, $cservdb, $dbh);
-		import_cdrs($lim, $cservdb, $dbh, $accounts_map);
+		import_cdrs($lim, $cservdb, $dbh, $accounts_map, $pricing_map);
 
 		$dbh->commit;
 		return;
@@ -120,6 +121,20 @@ sub array_to_postgres {
 		}
 	}
 	return '{"' . $r . '"}';
+}
+
+=head3 is_stub_account($cservdb, $accountid)
+
+Returns if the given account ID belongs to a stub account (i.e. account state is UNPAID).
+
+=cut
+
+sub is_stub_account {
+	my ($cservdb, $accountid) = @_;
+	my $collection = $cservdb->get_collection("accounts");
+
+	my $cursor = $collection->find({'state' => 'UNPAID', '_id' => MongoDB::OID->new($accountid)});
+	return $cursor->next ? 1 : 0;
 }
 
 =head3 import_accounts($lim, $database, $dbh)
@@ -354,14 +369,109 @@ sub import_pricings {
 	return \%pricing_map;
 }
 
-=head3 import_cdrs($database)
+=head3 import_cdrs($lim, $cservdb, $dbh, $accounts_map, $pricing_map)
 
-Import the CDRs from Mongo to Liminfra.
+Import the CDRs from Mongo to Liminfra. The given database is a
+MongoDB::Database pointing at CServ's database; the given dbh is a DBI handle
+pointing at liminfra's database. The dbh must be in transaction state and
+should have an exclusive lock on the 'cdr' table.  The accounts_map is a
+hashref containing CServ account ID's as keys and liminfra account ID's as
+values; the pricing_map is a hashref containing CServ pricing ID's as keys and
+liminfra pricing ID's as values.
 
 =cut
 
 sub import_cdrs {
-	my ($database) = @_;
+	my ($lim, $cservdb, $dbh, $accounts_map, $pricing_map) = @_;
+	my $collection = $cservdb->get_collection("cdr");
+
+	verify_table_empty($dbh, "cdr");
+
+	my %pricing_map;
+	my %unlinked_cdrs_map;
+
+	my $cursor = $collection->find();
+	while(my $cdr = $cursor->next) {
+		my $sth = $dbh->prepare("INSERT INTO cdr (speakupAccount, pricing_id,
+			time, service, units, callid, \"from\", \"to\", invoice_id,
+			connectiontype, connected, destination) VALUES
+			(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+
+		my $service = $cdr->{'service'};
+
+		my $pricing_id;
+		if($cdr->{'pricing'}) {
+			$pricing_id = $pricing_map->{$cdr->{'pricing'}{'pricingRuleId'}};
+		}
+
+		my $time = $cdr->{'time'}->iso8601();
+		my $units = $service eq "voice" ? $cdr->{'seconds'} :
+			$service eq "data" ? $cdr->{'kilobytes'} : 1;
+		my $speakupAccount = $cdr->{'additionalInfo'}{'externalAccount'};
+		if($speakupAccount eq " metzlar") {
+			$speakupAccount = "metzlar";
+		}
+
+		# check if the account this cdr was linked to is still the same
+		my $should_be_mongo_account = $cdr->{'account'};
+		my $check_sth = $dbh->prepare("SELECT account_id, period FROM speakupAccount WHERE lower(name)=lower(?) and period @> ?::date");
+		$check_sth->execute($speakupAccount, $time);
+		my $check_result = $check_sth->fetchrow_arrayref();
+		if(is_stub_account($cservdb, $should_be_mongo_account) && $check_result && defined($check_result->[0])) {
+			die "CDR account points at stub account, but it's not stub in liminfra\n";
+		} elsif(!is_stub_account($cservdb, $should_be_mongo_account) && !$check_result) {
+			warn "Nonstub Mongo account in CDR: $should_be_mongo_account\n";
+			warn "No account ID in speakupAccount for name=$speakupAccount, period=$time\n";
+			die "CDR account points at real account, but it's stub in liminfra\n";
+		} elsif(!$accounts_map->{$should_be_mongo_account}) {
+			# CDR is linked to nonexistant account, unlink it
+			$unlinked_cdrs_map{$should_be_mongo_account} ||= [];
+			push @{$unlinked_cdrs_map{$should_be_mongo_account}}, $speakupAccount;
+		} elsif($check_result->[0] != $accounts_map->{$should_be_mongo_account}) {
+			die "This CDR was owned by a different account than expected from the externalAccount field\n";
+		}
+
+		# check if the computed price and cost still makes sense
+		if($pricing_id) {
+			$check_sth = $dbh->prepare("SELECT price_per_line + price_per_unit * ? AS price, cost_per_line + cost_per_unit * ? AS cost FROM pricing WHERE id=?");
+			$check_sth->execute($units, $units, $pricing_id);
+			$check_result = $check_sth->fetchrow_arrayref();
+			if(!$check_result) {
+				die "Could not recompute price for CDR\n";
+			} elsif($cdr->{'service'} eq "voice" && !$cdr->{'connected'}) {
+				if($cdr->{'pricing'}{'computedPrice'} > 0
+				|| $cdr->{'pricing'}{'computedCost'} > 0) {
+					die "Unconnected CDR with pricing\n";
+				}
+			} elsif(abs($check_result->[0] - $cdr->{'pricing'}{'computedPrice'}) >= 1) {
+				warn "CDR ID: " . $cdr->{'_id'} . "\n";
+				warn sprintf("Expected price: %f, computed price: %f\n", $check_result->[0], $cdr->{'pricing'}{'computedPrice'});
+				die "Mismatch in price of CDR\n";
+			} elsif(int($check_result->[1]) != $cdr->{'pricing'}{'computedCost'}) {
+				die "Mismatch in cost of CDR\n";
+			}
+		}
+
+		if($service eq "voice" && !$cdr->{type}) {
+			$cdr->{type} = "EXT_MOBILE";
+		}
+
+		$sth->execute($speakupAccount, $pricing_id, $time, uc($service), $units,
+			map { $cdr->{$_} } qw(callId from to invoice type connected destination));
+	}
+
+	if(%unlinked_cdrs_map) {
+		print "Unlinked CDR counts for nonexistant accounts:\n";
+		foreach my $account (keys %unlinked_cdrs_map) {
+			my @accounts;
+			foreach my $a(@{$unlinked_cdrs_map{$account}}) {
+				if(!grep {$a eq $_} @accounts) {
+					push @accounts, $a;
+				}
+			}
+			print "  $account (" . join(", ", @accounts) . ")\n";
+		}
+	}
 }
 
 1;

@@ -338,6 +338,27 @@ sub initialize_database {
 			price_per_unit MONEY5 NOT NULL  -- used to be price.perMinute/perKilobyte
 		);");
 
+		$dbh->do("CREATE TABLE cdr (
+			id SERIAL PRIMARY KEY NOT NULL,
+			service SERVICETYPE NOT NULL,
+			callId SHORTTEXT NOT NULL,
+			\"from\" SHORTTEXT NOT NULL,
+			\"to\" SHORTTEXT NOT NULL,
+			speakupAccount SHORTTEXT NOT NULL,
+			time TIMESTAMP NOT NULL,
+			pricing_id INTEGER NULL,
+			invoice_id INVOICEID NULL REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+			connectiontype CONNECTIONTYPE NULL,
+			CHECK(service = 'VOICE' OR service = 'SMS' OR connectiontype IS NULL),
+			CHECK(service != 'VOICE' OR connectiontype IS NOT NULL),
+			CHECK(service != 'SMS' OR connectiontype IS NOT NULL),
+			units INTEGER NOT NULL,
+			connected BOOLEAN NULL,
+			CHECK(service = 'VOICE' OR connected IS NULL),
+			CHECK(service != 'VOICE' OR connected IS NOT NULL),
+			destination SHORTTEXT NULL
+		);");
+
 		return $dbh->commit();
 	} catch {
 		$dbh->rollback();
