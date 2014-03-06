@@ -146,7 +146,7 @@ sub import_accounts {
 	my %accounts_map;
 	while(my $account = $cursor->next) {
 		my $id = $account->{'_id'}->to_string();
-		my $speakupAccount = $account->{'externalAccount'}{'speakup'};
+		my $speakupAccount = $account->{'externalAccounts'}{'speakup'};
 		my $email = $account->{'email'};
 		if(!$email) {
 			# invalid account, just add the speakupAccount and continue
