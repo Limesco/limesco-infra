@@ -151,19 +151,19 @@ sub import_accounts {
 		if(!$email) {
 			# invalid account, just add the speakupAccount and continue
 			if($speakupAccount) {
-				$dbh->do("INSERT INTO speakupAccount (name, period) VALUES (?, '[today,)')", undef, $speakupAccount);
+				$dbh->do("INSERT INTO speakupAccount (name, period) VALUES (?, '(,)')", undef, $speakupAccount);
 			}
 			next;
 		}
 		my $sth = $dbh->prepare("INSERT INTO account (id, period, first_name, last_name, street_address, postal_code,
-			city, email, state) VALUES (NEXTVAL('account_id_seq'), '[today,)', ?, ?, ?, ?, ?, ?, ?)");
+			city, email, state) VALUES (NEXTVAL('account_id_seq'), '(,)', ?, ?, ?, ?, ?, ?, ?)");
 		$sth->execute($account->{'fullName'}{'firstName'}, $account->{'fullName'}{'lastName'},
 			$account->{'address'}{'streetAddress'}, $account->{'address'}{'postalCode'},
 			$account->{'address'}{'locality'}, $email, $account->{'state'});
 		my $account_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "account_id_seq"});
 		$accounts_map{$id} = $account_id;
 		if($speakupAccount) {
-			$dbh->do("INSERT INTO speakupAccount (name, period, account_id) VALUES (?, '[today,)', ?)", undef, $speakupAccount, $account_id);
+			$dbh->do("INSERT INTO speakupAccount (name, period, account_id) VALUES (?, '(,)', ?)", undef, $speakupAccount, $account_id);
 		}
 	}
 	return \%accounts_map;
@@ -193,7 +193,7 @@ sub import_sims {
 		my $puk = $sim->{'puk'};
 		my $state = $sim->{'state'};
 		if($state eq "STOCK") {
-			$dbh->do("INSERT INTO sim (iccid, period, puk, state) VALUES (?, '[today,)', ?, 'STOCK')", undef, $iccid, $puk);
+			$dbh->do("INSERT INTO sim (iccid, period, puk, state) VALUES (?, '(,)', ?, 'STOCK')", undef, $iccid, $puk);
 			next;
 		}
 
@@ -214,7 +214,7 @@ sub import_sims {
 		my $sth = $dbh->prepare("INSERT INTO sim (iccid, period, state, puk, owner_account_id, data_type,
 			exempt_from_cost_contribution, porting_state, activation_invoice_id, last_monthly_fees_invoice_id,
 			last_monthly_fees_month, call_connectivity_type, sip_realm, sip_username, sip_authentication_username,
-			sip_password, sip_uri, sip_expiry, sip_trunk_password) VALUES (?, '[today,)', ?, ?, ?, ?,
+			sip_password, sip_uri, sip_expiry, sip_trunk_password) VALUES (?, '(,)', ?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
 
 		my @sipSettings;
@@ -231,7 +231,7 @@ sub import_sims {
 			if($phone =~ /^06(\d+)$/) {
 				$phone = "316$1";
 			}
-			$sth = $dbh->prepare("INSERT INTO phonenumber (phonenumber, period, sim_iccid) VALUES (?, '[today,)', ?)");
+			$sth = $dbh->prepare("INSERT INTO phonenumber (phonenumber, period, sim_iccid) VALUES (?, '(,)', ?)");
 			$sth->execute($phone, $iccid);
 		}
 	}
