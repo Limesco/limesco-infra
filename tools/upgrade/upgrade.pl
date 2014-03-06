@@ -311,7 +311,7 @@ sub initialize_database {
 		);");
 
 		$dbh->do("CREATE TYPE servicetype AS ENUM('DATA', 'SMS', 'VOICE');");
-		$dbh->do("CREATE TYPE cdrtype AS ENUM('EXT_MOBILE', 'MOBILE_EXT', 'EXT_PBX', 'MOBILE_PBX', 'PBX_MOBILE');");
+		$dbh->do("CREATE TYPE connectiontype AS ENUM('EXT_MOBILE', 'MOBILE_EXT', 'EXT_PBX', 'MOBILE_PBX', 'PBX_MOBILE');");
 		$dbh->do("CREATE TABLE pricing (
 			id SERIAL PRIMARY KEY NOT NULL,
 			period DATERANGE NOT NULL,
@@ -319,10 +319,10 @@ sub initialize_database {
 			service SERVICETYPE NOT NULL,
 			hidden BOOLEAN NOT NULL,
 
-			cdrtype CDRTYPE[] NULL,
-			CHECK(service = 'VOICE' OR service = 'SMS' OR cdrtype IS NULL),
-			CHECK(service != 'VOICE' OR cdrtype IS NOT NULL),
-			CHECK(service != 'SMS' OR cdrtype IS NOT NULL),
+			connectiontype CONNECTIONTYPE[] NULL,
+			CHECK(service = 'VOICE' OR service = 'SMS' OR connectiontype IS NULL),
+			CHECK(service != 'VOICE' OR connectiontype IS NOT NULL),
+			CHECK(service != 'SMS' OR connectiontype IS NOT NULL),
 
 			call_connectivity_type CALLCONNECTIVITYTYPE[] NULL,
 			CHECK(service = 'VOICE' OR call_connectivity_type IS NULL),

@@ -322,7 +322,7 @@ sub import_pricings {
 		my $ccv = array_to_postgres($pricing->{'applicability'}{'callConnectivityType'});
 		my $dest = array_to_postgres($pricing->{'applicability'}{'destination'});
 		my $sth = $dbh->prepare("INSERT INTO pricing (period, description, service,
-			hidden, cdrtype, call_connectivity_type, destination, cost_per_line,
+			hidden, connectiontype, call_connectivity_type, destination, cost_per_line,
 			cost_per_unit, price_per_line, price_per_unit)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
 
