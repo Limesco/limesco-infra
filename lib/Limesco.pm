@@ -10,13 +10,15 @@ use DBD::Pg;
 our $VERSION = "0.01";
 
 sub new_from_args {
-	my ($package, $args) = @_;
+	my ($package, $args, $param_handler) = @_;
+	$param_handler ||= sub { return 1; };
+
 	my $configfile = default_configfile();
 	for(my $i = 0; $i < @$args; ++$i) {
 		my $arg = $args->[$i];
 		if($arg eq "-c") {
 			$configfile = $args->[++$i];
-		} else {
+		} elsif(!$param_handler->($args, \$i)) {
 			croak "Unknown parameter: $arg";
 		}
 	}
