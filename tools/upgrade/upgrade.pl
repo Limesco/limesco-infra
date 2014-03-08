@@ -179,6 +179,7 @@ sub initialize_database {
 		$dbh->do("CREATE TABLE account (
 			id INTEGER NOT NULL,
 			period DATERANGE NOT NULL,
+			company_name SHORTTEXT NULL,
 			first_name SHORTTEXT NOT NULL,
 			last_name SHORTTEXT NOT NULL,
 			street_address SHORTTEXT NOT NULL,

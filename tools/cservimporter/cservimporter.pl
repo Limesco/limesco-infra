@@ -170,9 +170,10 @@ sub import_accounts {
 			}
 			next;
 		}
-		my $sth = $dbh->prepare("INSERT INTO account (id, period, first_name, last_name, street_address, postal_code,
-			city, email, state) VALUES (NEXTVAL('account_id_seq'), '(,)', ?, ?, ?, ?, ?, ?, ?)");
-		$sth->execute($account->{'fullName'}{'firstName'}, $account->{'fullName'}{'lastName'},
+		my $sth = $dbh->prepare("INSERT INTO account (id, period, company_name, first_name, last_name, street_address, postal_code,
+			city, email, state) VALUES (NEXTVAL('account_id_seq'), '(,)', ?, ?, ?, ?, ?, ?, ?, ?)");
+		$sth->execute($account->{'companyName'},
+			$account->{'fullName'}{'firstName'}, $account->{'fullName'}{'lastName'},
 			$account->{'address'}{'streetAddress'}, $account->{'address'}{'postalCode'},
 			$account->{'address'}{'locality'}, $email, $account->{'state'});
 		my $account_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "account_id_seq"});
