@@ -1,0 +1,111 @@
+\documentclass[a4paper,11pt]{memoir}
+
+\usepackage[utf8]{inputenc}
+\usepackage{fullpage}
+\usepackage[fleqn]{amsmath}
+\usepackage{hyperref}
+\usepackage{xspace}
+\usepackage{concmath}
+\usepackage[T1]{fontenc}
+\usepackage{tabularx}
+
+\newcommand{\totaalbedrag}{\footnotesize{Het totaalbedrag inclusief BTW dient te worden voldaan binnen 14 kalenderdagen na de \\
+factuurdatum (\beginperl my ($y, $m, $d) = $invoice->{'date'} =~ /^(20\d\d)-(\d\d)-(\d\d)/; $OUT .= "$d-$m-$y"; \endperl).
+Indien er vragen, opmerkingen of klachten zijn over deze factuur, kun je ons
+een mail sturen via \href{mailto:support@limesco.nl}{support@limesco.nl} onder
+vermelding van het factuurnummer (\beginperl $invoice->{'id'} \endperl).}}
+
+\makepagestyle{factuur}
+\makeevenfoot{factuur}{}{\totaalbedrag \\ Pagina \thepage}{}
+\makeoddfoot{factuur}{}{\totaalbedrag \\ Pagina \thepage}{}
+
+
+\begin{document}
+\pagestyle{factuur}
+\begin{flushright}
+{\LARGE
+Limesco B.V. \\
+}
+Sophiaweg 34 \\
+6523 NJ  Nijmegen \\
+\end{flushright}
+
+\begin{flushright}
+\begin{tabular}{r l}
+KVK-nummer & 55258778 \\
+BTW-nummer & NL851628709B01 \\
+IBAN & NL24RABO0169207587 \\
+BIC  & RABONL2U \\
+E-mailadres algemeen & \href{mailto:directie@limesco.nl}{directie@limesco.nl} \\
+E-mailadres support & \href{mailto:support@limesco.nl}{support@limesco.nl} \\
+\hline
+Factuurnummer & \beginperl $invoice->{'id'} \endperl \\
+Factuurdatum & \beginperl formatDate($invoice->{'date'}) \endperl
+\end{tabular}
+\end{flushright}
+
+\begin{flalign*} \beginperl if( $account->{'company_name'} ) { $OUT .= '
+\mbox{Bedrijf}       &: \mbox{'.$account->{'company_name'}.'}' } \endperl \\
+\mbox{Naam}          &: \mbox{\beginperl $account->{'first_name'} . " " . $account->{'last_name'} \endperl} \\
+\mbox{Adres}         &: \mbox{\beginperl $account->{'street_address'} \endperl} \\
+\mbox{Postcode}      &: \mbox{\beginperl $account->{'postal_code'} \endperl} \\
+\mbox{Plaats}        &: \mbox{\beginperl $account->{'city'} \endperl} \\
+\end{flalign*}
+
+\begin{center}
+\line(1,0){500}
+\end{center}
+
+\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
+\newcolumntype{A}{>{\raggedleft\arraybackslash}p{3.0cm}}
+\newcolumntype{B}{>{\raggedleft\arraybackslash}p{1.8cm}}
+\newcolumntype{S}{>{\raggedleft\arraybackslash}p{3.0cm}}
+\begin{tabularx}{\textwidth}{ | X | A | S | B | }
+\hline
+Omschrijving      & Aantal  & Stuksprijs & Bedrag \\
+\hline
+\beginperl
+	foreach my $itemline (grep { $_->{'type'} ne "TAX" } @{$invoice->{'item_lines'}}) {
+		my @description = split /\n/, $itemline->{'description'};
+		if($itemline->{'type'} eq "NORMAL") {
+			$OUT .= sprintf("%s & %d & %.4f & %.2f \\\\\n", shift @description, $itemline->{'item_count'}, $itemline->{'item_price'},
+				$itemline->{'rounded_total'});
+		} elsif($itemline->{'type'} eq "DURATION") {
+			$OUT .= sprintf("%s & %d gesprekken & %.4f / gesprek & %.2f \\\\\n", shift @description, $itemline->{'number_of_calls'},
+				$itemline->{'price_per_call'}, $itemline->{'rounded_total'});
+			$OUT .= sprintf("%s & %d seconden & %.4f / minuut & \\\\\n", shift @description, $itemline->{'number_of_seconds'},
+				$itemline->{'price_per_minute'});
+		} else {
+			die "Unknown item line type " . $itemline->{'type'} . "\n";
+		}
+		foreach my $line (@description) {
+			$OUT .= "$line & & & \\\\\n";
+		}
+		$OUT .= "\\hline\n";
+	}
+\endperl
+\end{tabularx}
+
+\begin{flushright}
+Totaal excl. BTW: \beginperl sprintf( "%.2f", $invoice->{'rounded_without_taxes'} ) \endperl
+\end{flushright}
+
+\begin{tabularx}{\textwidth}{ | X | X | R | }
+\hline
+Bedrag & BTW & BTW-bedrag \\
+\hline
+\beginperl
+	foreach my $taxline (grep { $_->{'type'} eq "TAX" } @{$invoice->{'item_lines'}}) {
+		$OUT .= sprintf("%.2f", $taxline->{'base_amount'}) . " & ";
+		$OUT .= sprintf("%.1f\\%%", $taxline->{'taxrate'} * 100) . " & ";
+		$OUT .= sprintf("%.2f", $taxline->{'rounded_total'}) . " \\\\ ";
+	}
+\endperl
+\hline
+\end{tabularx}
+
+\begin{flushright}
+Totaal incl. BTW: \textbf{\beginperl sprintf( "%.2f", $invoice->{'rounded_with_taxes'}) \endperl}
+\end{flushright}
+
+\end{document}
