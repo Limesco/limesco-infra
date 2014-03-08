@@ -273,6 +273,10 @@ sub initialize_database {
 		$dbh->do("CREATE TYPE itemlinetype AS ENUM('NORMAL', 'DURATION', 'TAX');");
 		$dbh->do('CREATE DOMAIN invoiceid AS TEXT CHECK(VALUE ~ \'^\d\dC\d{6}$\');');
 
+		$dbh->do("CREATE FUNCTION floorn (n numeric, places int) RETURNS numeric "
+			."AS 'SELECT (floor(n * power(10, places)) / power(10, places))::numeric;' "
+			."LANGUAGE SQL IMMUTABLE RETURNS NULL ON NULL INPUT;");
+
 		$dbh->do("CREATE TABLE invoice (
 			id INVOICEID PRIMARY KEY NOT NULL,
 			account_id INTEGER NOT NULL,

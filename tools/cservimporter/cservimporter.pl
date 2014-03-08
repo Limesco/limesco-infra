@@ -283,15 +283,16 @@ sub import_invoices {
 
 		my $sth = $dbh->prepare("INSERT INTO invoice (id, account_id, date,
 		   creation_time, rounded_without_taxes, rounded_with_taxes) VALUES
-		   (?, ?, ?, ?, ?::numeric/10000, ?::numeric/10000);");
+		   (?, ?, ?, ?, floorn(?::numeric/10000, 2), floorn(?::numeric/10000, 2));");
 		$sth->execute($id, $account_id, $invoice_date, $creation_time,
 			$invoice->{'totalWithoutTaxes'}, $invoice->{'totalWithTaxes'});
 
 		$sth = $dbh->prepare("INSERT INTO invoice_itemline (invoice_id, description,
 		   type, base_amount, taxrate, item_price, item_count, rounded_total,
 		   number_of_calls, number_of_seconds, price_per_call,
-		   price_per_minute) VALUES (?, ?, ?, ?::numeric/10000, ?, ?::numeric/10000, ?, ?::numeric/10000,
-		   ?, ?, ?::numeric/10000, ?::numeric/10000);");
+		   price_per_minute) VALUES (?, ?, ?, floorn(?::numeric/10000, 2),
+		   ?, floorn(?::numeric/10000, 4), ?, floorn(?::numeric/10000, 2), ?, ?,
+		   floorn(?::numeric/10000, 4), floorn(?::numeric/10000, 4));");
 		foreach my $line (@{$invoice->{'itemLines'}}) {
 			my $description = $line->{'description'};
 			if($line->{'multilineDescription'} && @{$line->{'multilineDescription'}}) {
