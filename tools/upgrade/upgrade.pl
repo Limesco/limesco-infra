@@ -290,6 +290,10 @@ sub initialize_database {
 			taxrate MONEY5 NOT NULL,
 			rounded_total MONEY2 NOT NULL,
 
+			base_amount MONEY5,
+			CHECK (type = 'TAX' OR base_amount IS NULL),
+			CHECK (type != 'TAX' OR base_amount IS NOT NULL),
+
 			item_price MONEY5,
 			CHECK (type = 'DURATION' OR item_price IS NOT NULL),
 			CHECK (type != 'DURATION' OR item_price IS NULL),

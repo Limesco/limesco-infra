@@ -288,23 +288,23 @@ sub import_invoices {
 			$invoice->{'totalWithoutTaxes'}, $invoice->{'totalWithTaxes'});
 
 		$sth = $dbh->prepare("INSERT INTO invoice_itemline (invoice_id, description,
-		   type, taxrate, item_price, item_count, rounded_total,
+		   type, base_amount, taxrate, item_price, item_count, rounded_total,
 		   number_of_calls, number_of_seconds, price_per_call,
-		   price_per_minute) VALUES (?, ?, ?, ?, ?::numeric/10000, ?, ?::numeric/10000,
+		   price_per_minute) VALUES (?, ?, ?, ?::numeric/10000, ?, ?::numeric/10000, ?, ?::numeric/10000,
 		   ?, ?, ?::numeric/10000, ?::numeric/10000);");
 		foreach my $line (@{$invoice->{'itemLines'}}) {
 			my $description = $line->{'description'};
 			if($line->{'multilineDescription'} && @{$line->{'multilineDescription'}}) {
 				$description = join "\n", @{$line->{'multilineDescription'}};
 			}
-			$sth->execute($id, $description, uc($line->{'type'}),
+			$sth->execute($id, $description, uc($line->{'type'}), undef,
 				map {$line->{$_}} qw(taxRate itemPrice
 				itemCount totalPrice numberOfCalls
 				numberOfSeconds pricePerCall pricePerMinute));
 		}
 		foreach my $line (@{$invoice->{'taxLines'}}) {
-			$sth->execute($id, "Tax", "TAX", $line->{'taxRate'}, $line->{'baseAmount'},
-				1, $line->{'taxAmount'}, undef, undef, undef, undef);
+			$sth->execute($id, "Tax", "TAX", $line->{'baseAmount'}, $line->{'taxRate'},
+				$line->{'taxAmount'}, 1, $line->{'taxAmount'}, undef, undef, undef, undef);
 		}
 	}
 }
