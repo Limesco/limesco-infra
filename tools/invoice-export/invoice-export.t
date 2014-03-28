@@ -133,3 +133,5 @@ is($input_tex, "", "End of input reached");
 # TODO: make accounts with multiple periods, check if the right one is selected
 # TODO: multiple itemlines, check sorting
 # TODO: test pdf generation by writing a simple valid .tex file, no dynamic contents
+
+$dbh->disconnect();
