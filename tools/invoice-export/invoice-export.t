@@ -14,7 +14,7 @@ use File::Temp qw(tempdir);
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
 plan tests => 32;
 
-require_ok("invoice-generate.pl");
+require_ok("invoice-export.pl");
 
 my $lim = Limesco->new_for_test($pgsql->dsn);
 my $dbh = $lim->get_database_handle();

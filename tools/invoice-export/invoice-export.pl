@@ -9,11 +9,11 @@ use Text::Template;
 use File::Temp qw(tempdir);
 use IPC::Run qw(run);
 
-=head1 invoice-generate.pl
+=head1 invoice-export.pl
 
-Usage: invoice-generate.pl [infra-options] [--template <textemplate>] --write-invoice <num> --write-to <filename>
+Usage: invoice-export.pl [infra-options] [--template <textemplate>] --write-invoice <num> --write-to <filename>
 
-This tool can be used to generate PDF or Tex templates for an invoice, using
+This tool can be used to export PDF or Tex templates for an invoice, using
 the file given using --template or 'invoice-template.tex' by default. It will
 write factoid <num> (e.g. 13C000144) to <filename>, which can be a pdf or tex
 file.
