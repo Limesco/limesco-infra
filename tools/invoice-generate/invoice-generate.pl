@@ -133,7 +133,10 @@ sub generate_tex {
 		}
 		die "Unknown date format: " . $_[0] . "\n";
 	}
-	my $tex = $t->fill_in(PACKAGE => 'T') or die "Failed to generate TeX template: $Text::Template::ERROR\n";
+	my $tex = $t->fill_in(PACKAGE => 'T');
+	if(!defined($tex)) {
+		die "Failed to generate TeX template: $Text::Template::ERROR\n";
+	}
 	return $tex;
 }
 
