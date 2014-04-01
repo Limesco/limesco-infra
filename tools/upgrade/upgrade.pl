@@ -347,25 +347,30 @@ sub initialize_database {
 			price_per_unit MONEY5 NOT NULL  -- used to be price.perMinute/perKilobyte
 		);");
 
+		$dbh->do("CREATE TYPE legreason AS ENUM('ORIG', 'CFIM', 'CFOR', 'CFBS', 'CFNA', 'ROAM', 'CALLBACK');");
+		$dbh->do("CREATE TYPE directiontype AS ENUM('IN', 'OUT');");
+
 		$dbh->do("CREATE TABLE cdr (
 			id SERIAL PRIMARY KEY NOT NULL,
 			service SERVICETYPE NOT NULL,
-			callId SHORTTEXT NOT NULL,
+			call_id SHORTTEXT NOT NULL,
 			\"from\" SHORTTEXT NOT NULL,
 			\"to\" SHORTTEXT NOT NULL,
 			speakup_account SHORTTEXT NOT NULL,
 			time TIMESTAMP NOT NULL,
-			pricing_id INTEGER NULL,
+			pricing_info JSON NULL,
+			computed_cost MONEY5 NULL,
+			computed_price MONEY5 NULL,
 			invoice_id INVOICEID NULL REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
-			connectiontype CONNECTIONTYPE NULL,
-			CHECK(service = 'VOICE' OR service = 'SMS' OR connectiontype IS NULL),
-			CHECK(service != 'VOICE' OR connectiontype IS NOT NULL),
-			CHECK(service != 'SMS' OR connectiontype IS NOT NULL),
 			units INTEGER NOT NULL,
 			connected BOOLEAN NULL,
 			CHECK(service = 'VOICE' OR connected IS NULL),
 			CHECK(service != 'VOICE' OR connected IS NOT NULL),
-			destination SHORTTEXT NULL
+			source SHORTTEXT NULL,
+			destination SHORTTEXT NULL,
+			direction DIRECTIONTYPE NOT NULL,
+			leg INT NULL,
+			reason LEGREASON NULL
 		);");
 
 		return $dbh->commit();

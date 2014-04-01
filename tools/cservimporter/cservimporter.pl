@@ -7,6 +7,7 @@ use lib '../lib';
 use lib '../../lib';
 use Limesco;
 use Carp;
+use JSON;
 
 =head1 cservimporter.pl
 
@@ -394,9 +395,9 @@ sub import_cdrs {
 
 	my $cursor = $collection->find();
 	while(my $cdr = $cursor->next) {
-		my $sth = $dbh->prepare("INSERT INTO cdr (speakup_account, pricing_id,
-			time, service, units, callid, \"from\", \"to\", invoice_id,
-			connectiontype, connected, destination) VALUES
+		my $sth = $dbh->prepare("INSERT INTO cdr (speakup_account, direction, pricing_info,
+			time, service, units, call_id, \"from\", \"to\", invoice_id,
+			connected, destination) VALUES
 			(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
 
 		my $service = $cdr->{'service'};
@@ -413,6 +414,7 @@ sub import_cdrs {
 		if($speakup_account eq " metzlar") {
 			$speakup_account = "metzlar";
 		}
+		my $direction = uc($cdr->{'additionalInfo'}{'10'});
 
 		# check if the account this cdr was linked to is still the same
 		my $should_be_mongo_account = $cdr->{'account'};
@@ -434,7 +436,9 @@ sub import_cdrs {
 		}
 
 		# check if the computed price and cost still makes sense
+		my $pricing_info;
 		if($pricing_id) {
+			$pricing_info = {pricing_rule => $pricing_id, description => "Imported from CServ"};
 			$check_sth = $dbh->prepare("SELECT price_per_line + price_per_unit * ? AS price, cost_per_line + cost_per_unit * ? AS cost FROM pricing WHERE id=?");
 			$check_sth->execute($units, $units, $pricing_id);
 			$check_result = $check_sth->fetchrow_arrayref();
@@ -454,12 +458,8 @@ sub import_cdrs {
 			}
 		}
 
-		if($service eq "voice" && !$cdr->{type}) {
-			$cdr->{type} = "EXT_MOBILE";
-		}
-
-		$sth->execute($speakup_account, $pricing_id, $time, uc($service), $units,
-			map { $cdr->{$_} } qw(callId from to invoice type connected destination));
+		$sth->execute($speakup_account, $direction, $pricing_info ? encode_json($pricing_info) : undef, $time, uc($service), $units,
+			map { $cdr->{$_} } qw(callId from to invoice connected destination));
 	}
 
 	if(%unlinked_cdrs_map) {
