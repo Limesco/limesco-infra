@@ -413,8 +413,8 @@ sub import_cdrs {
 	while(my $cdr = $cursor->next) {
 		my $sth = $dbh->prepare("INSERT INTO cdr (speakup_account, direction, pricing_info,
 			time, service, units, call_id, \"from\", \"to\", invoice_id,
-			connected, destination) VALUES
-			(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+			connected, destination, computed_price, computed_cost) VALUES
+			(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::numeric/10000, ?::numeric/10000);");
 
 		my $service = $cdr->{'service'};
 
@@ -464,17 +464,18 @@ sub import_cdrs {
 				|| $cdr->{'pricing'}{'computedCost'} > 0) {
 					die "Unconnected CDR with pricing\n";
 				}
-			} elsif(abs($check_result->[0] - $cdr->{'pricing'}{'computedPrice'}) >= 1) {
+			} elsif(abs($check_result->[0] - $cdr->{'pricing'}{'computedPrice'} / 10000) >= 1) {
 				warn "CDR ID: " . $cdr->{'_id'} . "\n";
 				warn sprintf("Expected price: %f, computed price: %f\n", $check_result->[0], $cdr->{'pricing'}{'computedPrice'});
 				die "Mismatch in price of CDR\n";
-			} elsif(int($check_result->[1]) != $cdr->{'pricing'}{'computedCost'}) {
+			} elsif(abs($check_result->[1] - $cdr->{'pricing'}{'computedCost'} / 10000) >= 1) {
 				die "Mismatch in cost of CDR\n";
 			}
 		}
 
 		$sth->execute($speakup_account, $direction, $pricing_info ? encode_json($pricing_info) : undef, $time, uc($service), $units,
-			map { $cdr->{$_} } qw(callId from to invoice connected destination));
+			(map { $cdr->{$_} } qw(callId from to invoice connected destination)),
+			$cdr->{'pricing'}{'computedPrice'}, $cdr->{'pricing'}{'computedCost'});
 	}
 
 	if(%unlinked_cdrs_map) {
