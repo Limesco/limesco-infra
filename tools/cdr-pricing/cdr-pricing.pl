@@ -87,13 +87,86 @@ Try to price a CDR. Updates its computed_price and computed_cost, and adds
 computational details into the pricing_info field. Does not write into the
 database, use 'write_cdr_pricing' for that.
 
-If a CDR cannot be priced, an error is thrown whose text contains 'unpricable'.
+This method uses temporal information from various tables (speakup_account,
+account, sim) -- it takes information from the time the CDR was formed. This
+means if a SIM changed settings halfway through the month, CDRs before that
+moment will be priced using the old settings, and after that moment will be
+priced using the new settings.
+
+If a CDR cannot be priced, an error is thrown whose text contains 'unpricable',
+and some explanation as to why this particular CDR is unpricable.
 
 =cut
 
 sub price_cdr {
 	my ($lim, $cdr) = @_;
-	die "All CDRs are unpricable";
+	my $dbh = $lim->get_database_handle();
+
+	# A CDR is unpricable if its externalAccount is unmatched
+	my $sth = $dbh->prepare("SELECT account_id FROM speakup_account WHERE lower(name)=lower(?) AND period @> ?::date");
+	$sth->execute($cdr->{'speakup_account'}, $cdr->{'time'});
+	my $account_id = $sth->fetchrow_arrayref();
+	if(!$account_id || !$account_id->[0]) {
+		die sprintf("This CDR is unpricable: its speakup_account, %s, is not matched to a Limesco account", $cdr->{'speakup_account'});
+	}
+	if($sth->fetchrow_arrayref()) {
+		die sprintf("This CDR is unpricable: its speakup_account, %s, matches to multiple Limesco accounts", $cdr->{'speakup_account'});
+	}
+	$account_id = $account_id->[0];
+
+	# If this is a voice CDR and connected is false, price and cost are always 0
+	if($cdr->{'service'} eq "VOICE" && defined $cdr->{'connected'} && $cdr->{'connected'} == 0) {
+		$cdr->{'computed_price'} = 0;
+		$cdr->{'computed_cost'} = 0;
+		$cdr->{'pricing_info'} = {description => "Unconnected VOICE CDR is always free"};
+		return;
+	}
+
+	# A CDR is unpricable if its phone number has no matching SIM
+	my $is_in = $cdr->{'direction'} && $cdr->{'direction'} eq "IN";
+	my $phone = $is_in ? $cdr->{'to'} : $cdr->{'from'};
+	$phone =~ s/-//;
+	if($phone =~ /^0?6(\d{8})$/) {
+		$phone = "316$1";
+	}
+
+	$sth = $dbh->prepare("SELECT * FROM sim WHERE owner_account_id=? AND period @> ?::date AND iccid=(SELECT sim_iccid FROM phonenumber WHERE phonenumber.phonenumber=? AND period @> ?::date)");
+	$sth->execute($account_id, $cdr->{'time'}, $phone, $cdr->{'time'});
+	my $sim = $sth->fetchrow_hashref();
+	if(!$sim) {
+		die sprintf("This CDR is unpricable: its phone number, %s, does not belong to a SIM card within speakup_account %s", $phone, $cdr->{'speakup_account'});
+	}
+	if($sth->fetchrow_hashref()) {
+		die sprintf("This CDR is unpricable: its phone number, %s, matches to multiple SIM cards within speakup_account %s", $phone, $cdr->{'speakup_account'});
+	}
+
+	if($sim->{'state'} ne "ALLOCATED" && $sim->{'state'} ne "ACTIVATION_REQUESTED" && $sim->{'state'} ne "ACTIVATED") {
+		die sprintf("This CDR is unpricable: it belongs to SIM with ICCID %s, but that SIM is in %s state", $sim->{'iccid'}, $sim->{'state'});
+	}
+
+	my $callConnectivityType = $sim->{'call_connectivity_type'};
+
+	# Enter monstruous query to find all pricing rules that match this CDR
+	$sth = $dbh->prepare("SELECT id, description, cost_per_line, cost_per_unit, price_per_line, price_per_unit "
+		."FROM pricing WHERE service=? AND period @> ?::date AND constraint_list_matches(?, source::text[]) "
+		."AND constraint_list_matches(?, destination::text[]) AND constraint_list_matches(?::text, direction::text[]) "
+		."AND constraint_list_matches(?, call_connectivity_type::text[]);");
+	$sth->execute($cdr->{'service'}, $cdr->{'time'}, $cdr->{'source'}, $cdr->{'destination'}, $cdr->{'direction'}, $callConnectivityType);
+	my $pricing_rule = $sth->fetchrow_hashref();
+	if(!$pricing_rule) {
+		die sprintf("This CDR is unpricable: no pricing rule could be found for this CDR");
+	}
+	if($sth->fetchrow_hashref()) {
+		die sprintf("This CDR is unpricable: multiple pricing rules could be found for this CDR");
+	}
+
+	$cdr->{'computed_price'} = $pricing_rule->{'price_per_line'} + $cdr->{'units'} * $pricing_rule->{'price_per_unit'};
+	$cdr->{'computed_cost'} = $pricing_rule->{'cost_per_line'} + $cdr->{'units'} * $pricing_rule->{'cost_per_unit'};
+	$cdr->{'pricing_info'} = {
+		pricing_rule => $pricing_rule->{'id'},
+		description => $pricing_rule->{'description'},
+		iccid => $sim->{'iccid'},
+	};
 }
 
 =head3 write_cdr_pricing($lim, $cdr)

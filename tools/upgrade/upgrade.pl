@@ -277,6 +277,10 @@ sub initialize_database {
 			."AS 'SELECT (floor(n * power(10, places)) / power(10, places))::numeric;' "
 			."LANGUAGE SQL IMMUTABLE RETURNS NULL ON NULL INPUT;");
 
+		$dbh->do("CREATE FUNCTION constraint_list_matches (needle text, haystack text[]) RETURNS boolean "
+			."AS 'SELECT array_lower(haystack, 1) IS NULL OR needle = ANY (haystack);' "
+			."LANGUAGE SQL IMMUTABLE;");
+
 		$dbh->do("CREATE TABLE invoice (
 			id INVOICEID PRIMARY KEY NOT NULL,
 			account_id INTEGER NOT NULL,
@@ -320,26 +324,20 @@ sub initialize_database {
 		);");
 
 		$dbh->do("CREATE TYPE servicetype AS ENUM('DATA', 'SMS', 'VOICE');");
-		$dbh->do("CREATE TYPE connectiontype AS ENUM('EXT_MOBILE', 'MOBILE_EXT', 'EXT_PBX', 'MOBILE_PBX', 'PBX_MOBILE');");
+		$dbh->do("CREATE TYPE directiontype AS ENUM('IN', 'OUT');");
+
 		$dbh->do("CREATE TABLE pricing (
 			id SERIAL PRIMARY KEY NOT NULL,
 			period DATERANGE NOT NULL,
 			description LONGTEXT NOT NULL,
-			service SERVICETYPE NOT NULL,
 			hidden BOOLEAN NOT NULL,
 
-			connectiontype CONNECTIONTYPE[] NULL,
-			CHECK(service = 'VOICE' OR service = 'SMS' OR connectiontype IS NULL),
-			CHECK(service != 'VOICE' OR connectiontype IS NOT NULL),
-			CHECK(service != 'SMS' OR connectiontype IS NOT NULL),
-
-			call_connectivity_type CALLCONNECTIVITYTYPE[] NULL,
-			CHECK(service = 'VOICE' OR call_connectivity_type IS NULL),
-			CHECK(service != 'VOICE' OR call_connectivity_type IS NOT NULL),
-
-			destination TEXT[] NULL,
-			CHECK(service = 'VOICE' OR destination IS NULL),
-			CHECK(service != 'VOICE' OR destination IS NOT NULL),
+			-- Filters. An empty list means 'any is fine'
+			service SERVICETYPE NOT NULL,
+			call_connectivity_type CALLCONNECTIVITYTYPE[] NOT NULL,
+			source TEXT[] NOT NULL,
+			destination TEXT[] NOT NULL,
+			direction DIRECTIONTYPE[] NOT NULL,
 
 			cost_per_line MONEY5 NOT NULL, -- used to be cost.perCall/perSms
 			cost_per_unit MONEY5 NOT NULL, -- used to be cost.perMinute/perKilobyte
@@ -348,7 +346,6 @@ sub initialize_database {
 		);");
 
 		$dbh->do("CREATE TYPE legreason AS ENUM('ORIG', 'CFIM', 'CFOR', 'CFBS', 'CFNA', 'ROAM', 'CALLBACK');");
-		$dbh->do("CREATE TYPE directiontype AS ENUM('IN', 'OUT');");
 
 		$dbh->do("CREATE TABLE cdr (
 			id SERIAL PRIMARY KEY NOT NULL,

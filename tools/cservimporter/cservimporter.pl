@@ -336,13 +336,25 @@ sub import_pricings {
 		my $id = $pricing->{'_id'}->to_string();
 		my $service = $pricing->{'service'};
 		my $period = '[' . $pricing->{'applicability'}{'validFrom'}->ymd() . ',)';
-		my $cdrt = array_to_postgres($pricing->{'applicability'}{'cdrType'});
+		my $cdrt = $pricing->{'applicability'}{'cdrType'};
 		my $ccv = array_to_postgres($pricing->{'applicability'}{'callConnectivityType'});
 		my $dest = array_to_postgres($pricing->{'applicability'}{'destination'});
+		my $dir = [];
+		if("EXT_PBX" ~~ $cdrt || "EXT_MOBILE" ~~ $cdrt) {
+			push @$dir, "IN";
+		}
+		if("MOBILE_PBX" ~~ $cdrt || "PBX_MOBILE" ~~ $cdrt || "MOBILE_EXT" ~~ $cdrt) {
+			push @$dir, "OUT";
+		}
+		if(@$dir > 1) {
+			die "More than one direction allowed, pricing rule cdrtype is ambiguous";
+		}
+
 		my $sth = $dbh->prepare("INSERT INTO pricing (period, description, service,
-			hidden, connectiontype, call_connectivity_type, destination, cost_per_line,
+			hidden, call_connectivity_type, source, destination, direction, cost_per_line,
 			cost_per_unit, price_per_line, price_per_unit)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::numeric/10000, ?::numeric/10000,
+			?::numeric/10000, ?::numeric/10000);");
 
 		my ($costperline, $costperunit, $priceperline, $priceperunit);
 		if($service eq "voice") {
@@ -362,8 +374,11 @@ sub import_pricings {
 			$priceperunit = $pricing->{'price'}{'perKilobyte'};
 		}
 
+		$ccv ||= [];
+		$dest ||= [];
+		$dir ||= [];
 		$sth->execute($period, $pricing->{'description'}, uc($pricing->{'service'}),
-			$pricing->{'hidden'} || "false", $cdrt, $ccv, $dest, $costperline,
+			$pricing->{'hidden'} || "false", $ccv, [], $dest, $dir, $costperline,
 			$costperunit, $priceperline, $priceperunit);
 
 		my $pricing_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "pricing_id_seq"});
