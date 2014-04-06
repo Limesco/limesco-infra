@@ -427,9 +427,8 @@ sub import_cdrs {
 		my $units = $service eq "voice" ? $cdr->{'seconds'} :
 			$service eq "data" ? $cdr->{'kilobytes'} : 1;
 		my $speakup_account = $cdr->{'additionalInfo'}{'externalAccount'};
-		if($speakup_account eq " metzlar") {
-			$speakup_account = "metzlar";
-		}
+		$speakup_account =~ s/^\s+//;
+		$speakup_account =~ s/\s+$//;
 		my $direction = uc($cdr->{'additionalInfo'}{'10'});
 
 		# check if the account this cdr was linked to is still the same
