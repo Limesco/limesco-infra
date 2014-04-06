@@ -243,7 +243,8 @@ sub import_sims {
 			$sim->{'callConnectivityType'}, @sipSettings);
 
 		my $phone = $sim->{'phoneNumber'};
-		if($phone) {
+		# Don't import phone numbers when state is DISABLED, or we have duplicates
+		if($phone && $state ne "DISABLED") {
 			$phone =~ s/-//;
 			if($phone =~ /^06(\d+)$/) {
 				$phone = "316$1";
