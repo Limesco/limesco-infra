@@ -195,8 +195,8 @@ sub initialize_database {
 
 		$dbh->do("ALTER SEQUENCE account_id_seq OWNED BY account.id;");
 
-		$dbh->do("CREATE TABLE speakupAccount (
-			name SHORTTEXT NOT NULL,
+		$dbh->do("CREATE TABLE speakup_account (
+			name SHORTTEXT NOT NULL, -- NOTE: always do case insensitive comparisons when checking this (TODO: exclusion constraint should be case insensitive)
 			period DATERANGE NOT NULL,
 			account_id INTEGER,
 			PRIMARY KEY (name, period),
@@ -353,7 +353,7 @@ sub initialize_database {
 			callId SHORTTEXT NOT NULL,
 			\"from\" SHORTTEXT NOT NULL,
 			\"to\" SHORTTEXT NOT NULL,
-			speakupAccount SHORTTEXT NOT NULL,
+			speakup_account SHORTTEXT NOT NULL,
 			time TIMESTAMP NOT NULL,
 			pricing_id INTEGER NULL,
 			invoice_id INVOICEID NULL REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT,

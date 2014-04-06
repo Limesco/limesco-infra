@@ -55,7 +55,7 @@ sub import_from_cserv_mongo {
 		$dbh->do("LOCK TABLE phonenumber IN ACCESS EXCLUSIVE MODE;");
 		$dbh->do("LOCK TABLE pricing IN ACCESS EXCLUSIVE MODE;");
 		$dbh->do("LOCK TABLE sim IN ACCESS EXCLUSIVE MODE;");
-		$dbh->do("LOCK TABLE speakupAccount IN ACCESS EXCLUSIVE MODE;");
+		$dbh->do("LOCK TABLE speakup_account IN ACCESS EXCLUSIVE MODE;");
 
 		my $accounts_map = import_accounts($lim, $cservdb, $dbh);
 		import_sims($lim, $cservdb, $dbh, $accounts_map);
@@ -161,12 +161,12 @@ sub import_accounts {
 	my %accounts_map;
 	while(my $account = $cursor->next) {
 		my $id = $account->{'_id'}->to_string();
-		my $speakupAccount = $account->{'externalAccounts'}{'speakup'};
+		my $speakup_account = $account->{'externalAccounts'}{'speakup'};
 		my $email = $account->{'email'};
 		if(!$email) {
-			# invalid account, just add the speakupAccount and continue
-			if($speakupAccount) {
-				$dbh->do("INSERT INTO speakupAccount (name, period) VALUES (?, '(,)')", undef, $speakupAccount);
+			# invalid account, just add the speakup_account and continue
+			if($speakup_account) {
+				$dbh->do("INSERT INTO speakup_account (name, period) VALUES (?, '(,)')", undef, $speakup_account);
 			}
 			next;
 		}
@@ -178,8 +178,8 @@ sub import_accounts {
 			$account->{'address'}{'locality'}, $email, $account->{'state'});
 		my $account_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "account_id_seq"});
 		$accounts_map{$id} = $account_id;
-		if($speakupAccount) {
-			$dbh->do("INSERT INTO speakupAccount (name, period, account_id) VALUES (?, '(,)', ?)", undef, $speakupAccount, $account_id);
+		if($speakup_account) {
+			$dbh->do("INSERT INTO speakup_account (name, period, account_id) VALUES (?, '(,)', ?)", undef, $speakup_account, $account_id);
 		}
 	}
 	return \%accounts_map;
@@ -394,7 +394,7 @@ sub import_cdrs {
 
 	my $cursor = $collection->find();
 	while(my $cdr = $cursor->next) {
-		my $sth = $dbh->prepare("INSERT INTO cdr (speakupAccount, pricing_id,
+		my $sth = $dbh->prepare("INSERT INTO cdr (speakup_account, pricing_id,
 			time, service, units, callid, \"from\", \"to\", invoice_id,
 			connectiontype, connected, destination) VALUES
 			(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
@@ -409,26 +409,26 @@ sub import_cdrs {
 		my $time = $cdr->{'time'}->iso8601();
 		my $units = $service eq "voice" ? $cdr->{'seconds'} :
 			$service eq "data" ? $cdr->{'kilobytes'} : 1;
-		my $speakupAccount = $cdr->{'additionalInfo'}{'externalAccount'};
-		if($speakupAccount eq " metzlar") {
-			$speakupAccount = "metzlar";
+		my $speakup_account = $cdr->{'additionalInfo'}{'externalAccount'};
+		if($speakup_account eq " metzlar") {
+			$speakup_account = "metzlar";
 		}
 
 		# check if the account this cdr was linked to is still the same
 		my $should_be_mongo_account = $cdr->{'account'};
-		my $check_sth = $dbh->prepare("SELECT account_id, period FROM speakupAccount WHERE lower(name)=lower(?) and period @> ?::date");
-		$check_sth->execute($speakupAccount, $time);
+		my $check_sth = $dbh->prepare("SELECT account_id, period FROM speakup_account WHERE lower(name)=lower(?) and period @> ?::date");
+		$check_sth->execute($speakup_account, $time);
 		my $check_result = $check_sth->fetchrow_arrayref();
 		if(is_stub_account($cservdb, $should_be_mongo_account) && $check_result && defined($check_result->[0])) {
 			die "CDR account points at stub account, but it's not stub in liminfra\n";
 		} elsif(!is_stub_account($cservdb, $should_be_mongo_account) && !$check_result) {
 			warn "Nonstub Mongo account in CDR: $should_be_mongo_account\n";
-			warn "No account ID in speakupAccount for name=$speakupAccount, period=$time\n";
+			warn "No account ID in speakup_account for name=$speakup_account, period=$time\n";
 			die "CDR account points at real account, but it's stub in liminfra\n";
 		} elsif(!$accounts_map->{$should_be_mongo_account}) {
 			# CDR is linked to nonexistant account, unlink it
 			$unlinked_cdrs_map{$should_be_mongo_account} ||= [];
-			push @{$unlinked_cdrs_map{$should_be_mongo_account}}, $speakupAccount;
+			push @{$unlinked_cdrs_map{$should_be_mongo_account}}, $speakup_account;
 		} elsif($check_result->[0] != $accounts_map->{$should_be_mongo_account}) {
 			die "This CDR was owned by a different account than expected from the externalAccount field\n";
 		}
@@ -458,7 +458,7 @@ sub import_cdrs {
 			$cdr->{type} = "EXT_MOBILE";
 		}
 
-		$sth->execute($speakupAccount, $pricing_id, $time, uc($service), $units,
+		$sth->execute($speakup_account, $pricing_id, $time, uc($service), $units,
 			map { $cdr->{$_} } qw(callId from to invoice type connected destination));
 	}
 
