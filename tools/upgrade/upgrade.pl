@@ -208,6 +208,21 @@ sub initialize_database {
 		$dbh->do("CREATE TYPE simdatatype AS ENUM('APN_NODATA', 'APN_500MB', 'APN_2000MB');");
 		$dbh->do("CREATE TYPE portingstate AS ENUM('NO_PORT', 'WILL_PORT', 'PORT_PENDING', 'PORT_DATE_KNOWN', 'PORTING_COMPLETED');");
 		$dbh->do("CREATE TYPE callconnectivitytype AS ENUM('OOTB', 'DIY');");
+		$dbh->do('CREATE DOMAIN invoiceid AS TEXT CHECK(VALUE ~ \'^\d\dC\d{6}$\');');
+		$dbh->do("CREATE TYPE currency AS ENUM('EUR');");
+		$dbh->do("CREATE DOMAIN money2 AS NUMERIC(12, 2);");
+		$dbh->do("CREATE DOMAIN money5 AS NUMERIC(12, 5);");
+		$dbh->do("CREATE TYPE itemlinetype AS ENUM('NORMAL', 'DURATION', 'TAX');");
+
+		$dbh->do("CREATE TABLE invoice (
+			id INVOICEID PRIMARY KEY NOT NULL,
+			account_id INTEGER NOT NULL,
+			currency CURRENCY NOT NULL DEFAULT 'EUR',
+			date DATE NOT NULL,
+			creation_time TIMESTAMP DEFAULT 'now',
+			rounded_without_taxes MONEY2 NOT NULL,
+			rounded_with_taxes MONEY2 NOT NULL
+		);");
 
 		$dbh->do("CREATE TABLE sim (
 			iccid SHORTTEXT NOT NULL,
@@ -227,9 +242,9 @@ sub initialize_database {
 			porting_state PORTINGSTATE,
 			CHECK (state='STOCK' OR porting_state IS NOT NULL),
 			CHECK (state!='STOCK' OR porting_state IS NULL),
-			activation_invoice_id SHORTTEXT,
+			activation_invoice_id INVOICEID REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
 			CHECK (state!='STOCK' OR activation_invoice_id IS NULL),
-			last_monthly_fees_invoice_id SHORTTEXT,
+			last_monthly_fees_invoice_id INVOICEID REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
 			CHECK (state!='STOCK' OR last_monthly_fees_invoice_id IS NULL),
 			last_monthly_fees_month DATE,
 			CHECK (last_monthly_fees_invoice_id IS NULL OR last_monthly_fees_month IS NOT NULL),
@@ -267,12 +282,6 @@ sub initialize_database {
 			EXCLUDE USING gist (phonenumber WITH =, period WITH &&)
 		)");
 
-		$dbh->do("CREATE TYPE currency AS ENUM('EUR');");
-		$dbh->do("CREATE DOMAIN money2 AS NUMERIC(12, 2);");
-		$dbh->do("CREATE DOMAIN money5 AS NUMERIC(12, 5);");
-		$dbh->do("CREATE TYPE itemlinetype AS ENUM('NORMAL', 'DURATION', 'TAX');");
-		$dbh->do('CREATE DOMAIN invoiceid AS TEXT CHECK(VALUE ~ \'^\d\dC\d{6}$\');');
-
 		$dbh->do("CREATE FUNCTION floorn (n numeric, places int) RETURNS numeric "
 			."AS 'SELECT (floor(n * power(10, places)) / power(10, places))::numeric;' "
 			."LANGUAGE SQL IMMUTABLE RETURNS NULL ON NULL INPUT;");
@@ -281,19 +290,10 @@ sub initialize_database {
 			."AS 'SELECT array_lower(haystack, 1) IS NULL OR needle = ANY (haystack);' "
 			."LANGUAGE SQL IMMUTABLE;");
 
-		$dbh->do("CREATE TABLE invoice (
-			id INVOICEID PRIMARY KEY NOT NULL,
-			account_id INTEGER NOT NULL,
-			currency CURRENCY NOT NULL DEFAULT 'EUR',
-			date DATE NOT NULL,
-			creation_time TIMESTAMP DEFAULT 'now',
-			rounded_without_taxes MONEY2 NOT NULL,
-			rounded_with_taxes MONEY2 NOT NULL
-		);");
 		$dbh->do("CREATE TABLE invoice_itemline (
 			id SERIAL PRIMARY KEY NOT NULL,
 			type ITEMLINETYPE NOT NULL,
-			invoice_id INVOICEID NOT NULL REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+			invoice_id INVOICEID NOT NULL REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
 			description LONGTEXT NOT NULL,
 			taxrate MONEY5 NOT NULL,
 			rounded_total MONEY2 NOT NULL,
@@ -358,7 +358,7 @@ sub initialize_database {
 			pricing_info JSON NULL,
 			computed_cost MONEY5 NULL,
 			computed_price MONEY5 NULL,
-			invoice_id INVOICEID NULL REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+			invoice_id INVOICEID NULL REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
 			units INTEGER NOT NULL,
 			connected BOOLEAN NULL,
 			CHECK(service = 'VOICE' OR connected IS NULL),
