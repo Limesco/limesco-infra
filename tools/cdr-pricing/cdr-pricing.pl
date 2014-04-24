@@ -105,7 +105,7 @@ sub for_every_unpriced_cdr {
 	my ($lim, $callback) = @_;
 	my $dbh = $lim->get_database_handle();
 
-	my $sth = $dbh->prepare("SELECT * FROM cdr WHERE pricing_info IS NULL");
+	my $sth = $dbh->prepare("SELECT * FROM cdr WHERE pricing_id IS NULL");
 	$sth->execute() or die "Query failed";
 	while(my $cdr = $sth->fetchrow_hashref()) {
 		$callback->($lim, $cdr);
@@ -114,9 +114,9 @@ sub for_every_unpriced_cdr {
 
 =head3 price_cdr($lim, $cdr)
 
-Try to price a CDR. Updates its computed_price and computed_cost, and adds
-computational details into the pricing_info field. Does not write into the
-database, use 'write_cdr_pricing' for that.
+Try to price a CDR. Updates its pricing_id, computed_price and computed_cost,
+and adds computational details into the pricing_info field. Does not write into
+the database, use 'write_cdr_pricing' for that.
 
 This method uses temporal information from various tables (speakup_account,
 account, sim) -- it takes information from the time the CDR was formed. This
@@ -185,8 +185,8 @@ sub price_cdr {
 
 	$cdr->{'computed_price'} = $pricing_rule->{'price_per_line'} + $cdr->{'units'} * $pricing_rule->{'price_per_unit'};
 	$cdr->{'computed_cost'} = $pricing_rule->{'cost_per_line'} + $cdr->{'units'} * $pricing_rule->{'cost_per_unit'};
+	$cdr->{'pricing_id'} = $pricing_rule->{'id'};
 	$cdr->{'pricing_info'} = {
-		pricing_rule => $pricing_rule->{'id'},
 		description => $pricing_rule->{'description'},
 		iccid => $sim->{'iccid'},
 	};
@@ -201,8 +201,8 @@ Write a CDR's pricing information into the database.
 sub write_cdr_pricing {
 	my ($lim, $cdr) = @_;
 	my $dbh = $lim->get_database_handle();
-	$dbh->do("UPDATE cdr SET pricing_info=?, computed_cost=?, computed_price=? WHERE id=?",
-		undef, encode_json($cdr->{'pricing_info'}), $cdr->{'computed_cost'}, $cdr->{'computed_price'})
+	$dbh->do("UPDATE cdr SET pricing_id=?, pricing_info=?, computed_cost=?, computed_price=? WHERE id=?",
+		undef, $cdr->{'pricing_id'}, encode_json($cdr->{'pricing_info'}), $cdr->{'computed_cost'}, $cdr->{'computed_price'}, $cdr->{'id'})
 		or die "Query failed";
 }
 

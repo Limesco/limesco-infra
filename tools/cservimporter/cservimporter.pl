@@ -420,10 +420,10 @@ sub import_cdrs {
 
 	my $cursor = $collection->find();
 	while(my $cdr = $cursor->next) {
-		my $sth = $dbh->prepare("INSERT INTO cdr (speakup_account, direction, pricing_info,
+		my $sth = $dbh->prepare("INSERT INTO cdr (speakup_account, direction, pricing_id, pricing_info,
 			time, service, units, call_id, \"from\", \"to\", invoice_id,
 			connected, destination, computed_price, computed_cost) VALUES
-			(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::numeric/10000, ?::numeric/10000);");
+			(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::numeric/10000, ?::numeric/10000);");
 
 		my $service = $cdr->{'service'};
 
@@ -462,7 +462,7 @@ sub import_cdrs {
 		# check if the computed price and cost still makes sense
 		my $pricing_info;
 		if($pricing_id) {
-			$pricing_info = {pricing_rule => $pricing_id, description => "Imported from CServ"};
+			$pricing_info = {description => "Imported from CServ"};
 			$check_sth = $dbh->prepare("SELECT price_per_line + price_per_unit * ? AS price, cost_per_line + cost_per_unit * ? AS cost FROM pricing WHERE id=?");
 			$check_sth->execute($units, $units, $pricing_id);
 			$check_result = $check_sth->fetchrow_arrayref();
@@ -482,7 +482,7 @@ sub import_cdrs {
 			}
 		}
 
-		$sth->execute($speakup_account, $direction, $pricing_info ? encode_json($pricing_info) : undef, $time, uc($service), $units,
+		$sth->execute($speakup_account, $direction, $pricing_info ? $pricing_id : undef, $pricing_info ? encode_json($pricing_info) : undef, $time, uc($service), $units,
 			(map { $cdr->{$_} } qw(callId from to invoice connected destination)),
 			$cdr->{'pricing'}{'computedPrice'}, $cdr->{'pricing'}{'computedCost'});
 	}

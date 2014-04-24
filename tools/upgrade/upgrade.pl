@@ -356,9 +356,18 @@ sub initialize_database {
 			\"to\" SHORTTEXT NOT NULL,
 			speakup_account SHORTTEXT NOT NULL,
 			time TIMESTAMP NOT NULL,
+
+			pricing_id BIGINT NULL REFERENCES pricing(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
 			pricing_info JSON NULL,
+			CHECK (pricing_id IS NULL OR pricing_info IS NOT NULL),
+			CHECK (pricing_id IS NOT NULL OR pricing_info IS NULL),
 			computed_cost MONEY5 NULL,
+			CHECK (pricing_id IS NULL OR computed_cost IS NOT NULL),
+			CHECK (pricing_id IS NOT NULL OR computed_cost IS NULL),
 			computed_price MONEY5 NULL,
+			CHECK (pricing_id IS NULL OR computed_price IS NOT NULL),
+			CHECK (pricing_id IS NOT NULL OR computed_price IS NULL),
+
 			invoice_id INVOICEID NULL REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
 			units INTEGER NOT NULL,
 			connected BOOLEAN NULL,
