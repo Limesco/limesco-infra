@@ -8,6 +8,7 @@ use lib '../../lib';
 use Limesco;
 use Carp;
 use JSON;
+use Try::Tiny;
 
 =head1 cservimporter.pl
 
@@ -59,10 +60,11 @@ sub import_from_cserv_mongo {
 		$dbh->do("LOCK TABLE speakup_account IN ACCESS EXCLUSIVE MODE;");
 
 		my $accounts_map = import_accounts($lim, $cservdb, $dbh);
-		import_sims($lim, $cservdb, $dbh, $accounts_map);
 		import_invoices($lim, $cservdb, $dbh, $accounts_map);
+		import_sims($lim, $cservdb, $dbh, $accounts_map);
 		my $pricing_map = import_pricings($lim, $cservdb, $dbh);
 		import_cdrs($lim, $cservdb, $dbh, $accounts_map, $pricing_map);
+		set_sim_start_dates($lim, $dbh);
 
 		$dbh->commit;
 		return;
@@ -211,7 +213,7 @@ sub import_sims {
 		my $puk = $sim->{'puk'};
 		my $state = $sim->{'state'};
 		if($state eq "STOCK") {
-			$dbh->do("INSERT INTO sim (iccid, period, puk, state) VALUES (?, '(,)', ?, 'STOCK')", undef, $iccid, $puk);
+			$dbh->do("INSERT INTO sim (iccid, period, puk, state) VALUES (?, '[today,)', ?, 'STOCK')", undef, $iccid, $puk);
 			next;
 		}
 
@@ -232,14 +234,30 @@ sub import_sims {
 		my $sth = $dbh->prepare("INSERT INTO sim (iccid, period, state, puk, owner_account_id, data_type,
 			exempt_from_cost_contribution, porting_state, activation_invoice_id, last_monthly_fees_invoice_id,
 			last_monthly_fees_month, call_connectivity_type, sip_realm, sip_username, sip_authentication_username,
-			sip_password, sip_uri, sip_expiry, sip_trunk_password) VALUES (?, '(,)', ?, ?, ?, ?,
+			sip_password, sip_uri, sip_expiry, sip_trunk_password) VALUES (?, ?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
 
 		my @sipSettings;
 		for(qw(realm username authenticationUsername password uri expiry speakupTrunkPassword)) {
 			push @sipSettings, $sim->{'sipSettings'}{$_};
 		}
-		$sth->execute($iccid, $state, $puk, $account_id, $sim->{'apnType'}, $sim->{'exemptFromCostContribution'},
+
+		# guess the starting date of this SIM by activation invoice ID;
+		# if unknown, it will be fixed in set_sim_start_dates()
+		my $period = '[today,)';
+		if($sim->{'activationInvoiceId'}) {
+			my $inv_sth = $dbh->prepare("SELECT date FROM invoice WHERE id=?");
+			$inv_sth->execute($sim->{'activationInvoiceId'});
+			my $invoice = $inv_sth->fetchrow_arrayref;
+			if(!$invoice) {
+				die "SIM activation invoice ID does not exist";
+			}
+			$period = '[' . $invoice->[0] . ',)';
+		} elsif($sim->{'contractStartDate'}) {
+			$period = '[' . $sim->{'contractStartDate'}->ymd . ',)';
+		}
+
+		$sth->execute($iccid, $period, $state, $puk, $account_id, $sim->{'apnType'}, $sim->{'exemptFromCostContribution'},
 			$sim->{'portingState'}, $sim->{'activationInvoiceId'}, $lastMonthlyFeesInvoice, $lastMonthlyFeesDate,
 			$sim->{'callConnectivityType'}, @sipSettings);
 
@@ -498,6 +516,42 @@ sub import_cdrs {
 				}
 			}
 			print "  $account (" . join(", ", @accounts) . ")\n";
+		}
+	}
+}
+
+=head3 set_sim_start_dates($lim)
+
+For every SIM imported, try to find out what their start date was and set it in
+the database. To do this, find the first CDR with a matching phone number.
+
+=cut
+
+sub set_sim_start_dates {
+	my ($lim, $dbh) = @_;
+	my $sth = $dbh->prepare("SELECT * FROM sim WHERE state <> 'DISABLED' AND state <> 'STOCK'");
+	$sth->execute();
+	while(my $sim = $sth->fetchrow_hashref) {
+		# first CDR for this SIM
+		my $firstcdr = $dbh->prepare("SELECT time::date AS startdate FROM cdr WHERE time < lower(?::daterange) AND (connected OR service <> 'VOICE') AND \"from\" IN (SELECT phonenumber FROM phonenumber WHERE sim_iccid=?) ORDER BY time ASC LIMIT 1");
+		$firstcdr->execute($sim->{'period'}, $sim->{'iccid'});
+		$firstcdr = $firstcdr->fetchrow_hashref;
+		if(!$firstcdr) {
+			# If the start date of the SIM is today, this means we've probably failed to find the right start date
+			# otherwise, we've probably found the right start date since the SIM wasn't used before then
+			my $datesth = $dbh->prepare("SELECT lower(period) = 'today'::date FROM sim WHERE iccid=?");
+			$datesth->execute($sim->{'iccid'});
+			if($datesth->fetchrow_arrayref->[0]) {
+				warn sprintf("Unable to set SIM start date for %s: no connected CDRs found for this SIM", $sim->{'iccid'});
+			}
+		} else {
+			# Assume this is the activation date for the SIM, so set it as the SIM start date
+			# Snap it to the beginning of the month, though
+			my ($month) = $firstcdr->{'startdate'} =~ /^(\d{4}-\d\d)-\d\d$/;
+			if(!$month) {
+				die "Failed to parse date";
+			}
+			$dbh->do("UPDATE sim SET period=? WHERE iccid=?", undef, "[$month-01,)", $sim->{'iccid'});
 		}
 	}
 }
