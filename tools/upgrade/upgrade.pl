@@ -211,7 +211,7 @@ sub initialize_database {
 		$dbh->do('CREATE DOMAIN invoiceid AS TEXT CHECK(VALUE ~ \'^\d\dC\d{6}$\');');
 		$dbh->do("CREATE TYPE currency AS ENUM('EUR');");
 		$dbh->do("CREATE DOMAIN money2 AS NUMERIC(12, 2);");
-		$dbh->do("CREATE DOMAIN money5 AS NUMERIC(12, 5);");
+		$dbh->do("CREATE DOMAIN money8 AS NUMERIC(12, 8);");
 		$dbh->do("CREATE TYPE itemlinetype AS ENUM('NORMAL', 'DURATION', 'TAX');");
 
 		$dbh->do("CREATE TABLE invoice (
@@ -295,14 +295,14 @@ sub initialize_database {
 			type ITEMLINETYPE NOT NULL,
 			invoice_id INVOICEID NOT NULL REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
 			description LONGTEXT NOT NULL,
-			taxrate MONEY5 NOT NULL,
+			taxrate MONEY8 NOT NULL,
 			rounded_total MONEY2 NOT NULL,
 
-			base_amount MONEY5,
+			base_amount MONEY8,
 			CHECK (type = 'TAX' OR base_amount IS NULL),
 			CHECK (type != 'TAX' OR base_amount IS NOT NULL),
 
-			item_price MONEY5,
+			item_price MONEY8,
 			CHECK (type = 'DURATION' OR item_price IS NOT NULL),
 			CHECK (type != 'DURATION' OR item_price IS NULL),
 			item_count INTEGER,
@@ -315,10 +315,10 @@ sub initialize_database {
 			number_of_seconds INTEGER,
 			CHECK (number_of_calls IS NULL OR number_of_seconds IS NOT NULL),
 			CHECK (number_of_calls IS NOT NULL OR number_of_seconds IS NULL),
-			price_per_call MONEY5,
+			price_per_call MONEY8,
 			CHECK (number_of_calls IS NULL OR price_per_call IS NOT NULL),
 			CHECK (number_of_calls IS NOT NULL OR price_per_call IS NULL),
-			price_per_minute MONEY5
+			price_per_minute MONEY8
 			CHECK (number_of_calls IS NULL OR price_per_minute IS NOT NULL),
 			CHECK (number_of_calls IS NOT NULL OR price_per_minute IS NULL)
 		);");
@@ -340,10 +340,10 @@ sub initialize_database {
 			direction DIRECTIONTYPE[] NOT NULL,
 			connected BOOLEAN[] NOT NULL,
 
-			cost_per_line MONEY5 NOT NULL, -- used to be cost.perCall/perSms
-			cost_per_unit MONEY5 NOT NULL, -- used to be cost.perMinute/perKilobyte
-			price_per_line MONEY5 NOT NULL, -- used to be price.perCall/perSms
-			price_per_unit MONEY5 NOT NULL  -- used to be price.perMinute/perKilobyte
+			cost_per_line MONEY8 NOT NULL, -- used to be cost.perCall/perSms
+			cost_per_unit MONEY8 NOT NULL, -- used to be cost.perMinute/perKilobyte
+			price_per_line MONEY8 NOT NULL, -- used to be price.perCall/perSms
+			price_per_unit MONEY8 NOT NULL  -- used to be price.perMinute/perKilobyte
 		);");
 
 		$dbh->do("CREATE TYPE legreason AS ENUM('ORIG', 'CFIM', 'CFOR', 'CFBS', 'CFNA', 'ROAM', 'CALLBACK');");
@@ -361,10 +361,10 @@ sub initialize_database {
 			pricing_info JSON NULL,
 			CHECK (pricing_id IS NULL OR pricing_info IS NOT NULL),
 			CHECK (pricing_id IS NOT NULL OR pricing_info IS NULL),
-			computed_cost MONEY5 NULL,
+			computed_cost MONEY8 NULL,
 			CHECK (pricing_id IS NULL OR computed_cost IS NOT NULL),
 			CHECK (pricing_id IS NOT NULL OR computed_cost IS NULL),
-			computed_price MONEY5 NULL,
+			computed_price MONEY8 NULL,
 			CHECK (pricing_id IS NULL OR computed_price IS NOT NULL),
 			CHECK (pricing_id IS NOT NULL OR computed_price IS NULL),
 
