@@ -446,6 +446,11 @@ sub import_cdrs {
 
 		my $service = $cdr->{'service'};
 
+		# If this CDR was never invoiced, don't include its pricing
+		# information. Because of algorithmic differences, we re-price
+		# every CDR after importing it.
+		my $is_invoiced = defined($cdr->{'invoice_id'});
+
 		my $pricing_id;
 		if($cdr->{'pricing'}) {
 			$pricing_id = $pricing_map->{$cdr->{'pricing'}{'pricingRuleId'}};
@@ -480,30 +485,34 @@ sub import_cdrs {
 
 		# check if the computed price and cost still makes sense
 		my $pricing_info;
-		if($pricing_id) {
+		my $computed_price;
+		my $computed_cost;
+		if($pricing_id && $is_invoiced) {
 			$pricing_info = {description => "Imported from CServ"};
+			$computed_price = $cdr->{'pricing'}{'computedPrice'};
+			$computed_cost = $cdr->{'pricing'}{'computedCost'};
 			$check_sth = $dbh->prepare("SELECT price_per_line + price_per_unit * ? AS price, cost_per_line + cost_per_unit * ? AS cost FROM pricing WHERE id=?");
 			$check_sth->execute($units, $units, $pricing_id);
 			$check_result = $check_sth->fetchrow_arrayref();
 			if(!$check_result) {
 				die "Could not recompute price for CDR\n";
 			} elsif($cdr->{'service'} eq "voice" && !$cdr->{'connected'}) {
-				if($cdr->{'pricing'}{'computedPrice'} > 0
-				|| $cdr->{'pricing'}{'computedCost'} > 0) {
+				if($computed_price > 0
+				|| $computed_cost > 0) {
 					die "Unconnected CDR with pricing\n";
 				}
-			} elsif(abs($check_result->[0] - $cdr->{'pricing'}{'computedPrice'} / 10000) >= 1) {
+			} elsif(abs($check_result->[0] - $computed_price / 10000) >= 1) {
 				warn "CDR ID: " . $cdr->{'_id'} . "\n";
-				warn sprintf("Expected price: %f, computed price: %f\n", $check_result->[0], $cdr->{'pricing'}{'computedPrice'});
+				warn sprintf("Expected price: %f, computed price: %f\n", $check_result->[0], $computed_price);
 				die "Mismatch in price of CDR\n";
-			} elsif(abs($check_result->[1] - $cdr->{'pricing'}{'computedCost'} / 10000) >= 1) {
+			} elsif(abs($check_result->[1] - $computed_cost / 10000) >= 1) {
 				die "Mismatch in cost of CDR\n";
 			}
 		}
 
 		$sth->execute($speakup_account, $direction, $pricing_info ? $pricing_id : undef, $pricing_info ? encode_json($pricing_info) : undef, $time, uc($service), $units,
 			(map { $cdr->{$_} } qw(callId from to invoice connected destination)),
-			$cdr->{'pricing'}{'computedPrice'}, $cdr->{'pricing'}{'computedCost'});
+			$computed_price, $computed_cost);
 	}
 
 	if(%unlinked_cdrs_map) {
