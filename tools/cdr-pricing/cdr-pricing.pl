@@ -153,34 +153,52 @@ sub price_cdr {
 		$phone = "316$1";
 	}
 
+	# Try to fetch corresponding SIM information. If this succeeds, try to find the correct
+	# pricing rule using the found SIM. If not, try to find a pricing rule regardless of SIM.
+	# If we can't find a SIM and only one pricing rule matches, we can use it anyway; if an
+	# ambiguous situation appears without a SIM (e.g. a pricing rule for OOTB and a different
+	# one for DIY) the CDR will be unpricable anyway.
 	$sth = $dbh->prepare("SELECT * FROM sim WHERE owner_account_id=? AND period @> ?::date AND iccid=(SELECT sim_iccid FROM phonenumber WHERE phonenumber.phonenumber=? AND period @> ?::date)");
 	$sth->execute($account_id, $cdr->{'time'}, $phone, $cdr->{'time'});
 	my $sim = $sth->fetchrow_hashref();
+	my $unpricable_error;
 	if(!$sim) {
-		die sprintf("This CDR is unpricable: its phone number, %s, does not belong to a SIM card within speakup_account %s", $phone, $cdr->{'speakup_account'});
+		$unpricable_error = sprintf("This CDR is unpricable: its phone number, %s, does not belong to a SIM card within speakup_account %s", $phone, $cdr->{'speakup_account'});
 	}
-	if($sth->fetchrow_hashref()) {
-		die sprintf("This CDR is unpricable: its phone number, %s, matches to multiple SIM cards within speakup_account %s", $phone, $cdr->{'speakup_account'});
-	}
-
-	if($sim->{'state'} ne "ALLOCATED" && $sim->{'state'} ne "ACTIVATION_REQUESTED" && $sim->{'state'} ne "ACTIVATED") {
-		die sprintf("This CDR is unpricable: it belongs to SIM with ICCID %s, but that SIM is in %s state", $sim->{'iccid'}, $sim->{'state'});
+	if($sim && $sth->fetchrow_hashref()) {
+		$unpricable_error = sprintf("This CDR is unpricable: its phone number, %s, matches to multiple SIM cards within speakup_account %s", $phone, $cdr->{'speakup_account'});
+		undef $sim;
 	}
 
-	my $callConnectivityType = $sim->{'call_connectivity_type'};
+	if($sim && $sim->{'state'} ne "ALLOCATED" && $sim->{'state'} ne "ACTIVATION_REQUESTED" && $sim->{'state'} ne "ACTIVATED") {
+		$unpricable_error = sprintf("This CDR is unpricable: it belongs to SIM with ICCID %s, but that SIM is in %s state", $sim->{'iccid'}, $sim->{'state'});
+		undef $sim;
+	}
 
 	# Enter monstruous query to find all pricing rules that match this CDR
-	$sth = $dbh->prepare("SELECT id, description, cost_per_line, cost_per_unit, price_per_line, price_per_unit "
+	my $sim_specific_where = $sim ? "AND constraint_list_matches(?, call_connectivity_type::text[])" : "";
+	my $sim_specific_variables = $sim ? [$sim->{'call_connectivity_type'}] : [];
+
+	my $query = "SELECT id, description, cost_per_line, cost_per_unit, price_per_line, price_per_unit "
 		."FROM pricing WHERE service=? AND period @> ?::date AND constraint_list_matches(?, source::text[]) "
 		."AND constraint_list_matches(?, destination::text[]) AND constraint_list_matches(?::text, direction::text[]) "
-		."AND constraint_list_matches(?, call_connectivity_type::text[]) AND constraint_list_matches(?::boolean::text, connected::text[]);";
-	$sth->execute($cdr->{'service'}, $cdr->{'time'}, $cdr->{'source'}, $cdr->{'destination'}, $cdr->{'direction'}, $callConnectivityType, $cdr->{'connected'});
+		."AND constraint_list_matches(?::boolean::text, connected::text[]) " . $sim_specific_where . ";";
+	my @variables = ($cdr->{'service'}, $cdr->{'time'}, $cdr->{'source'}, $cdr->{'destination'}, $cdr->{'direction'}, $cdr->{'connected'},
+		@$sim_specific_variables);
+	$sth = $dbh->prepare($query);
+	$sth->execute(@variables);
 	my $pricing_rule = $sth->fetchrow_hashref();
 	if(!$pricing_rule) {
 		die sprintf("This CDR is unpricable: no pricing rule could be found for this CDR");
 	}
 	if($sth->fetchrow_hashref()) {
-		die sprintf("This CDR is unpricable: multiple pricing rules could be found for this CDR");
+		if($unpricable_error) {
+			# Probably, multiple pricing rules were found because they depend on SIM specific information
+			# but we have no SIM card to take this information from. Throw that error.
+			die $unpricable_error;
+		} else {
+			die sprintf("This CDR is unpricable: multiple pricing rules could be found for this CDR");
+		}
 	}
 
 	$cdr->{'computed_price'} = $pricing_rule->{'price_per_line'} + $cdr->{'units'} * $pricing_rule->{'price_per_unit'};
