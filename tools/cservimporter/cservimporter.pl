@@ -332,6 +332,16 @@ sub import_pricings {
 
 	my %pricing_map;
 
+	my $sth = $dbh->prepare("INSERT INTO pricing (period, description, service,
+		hidden, call_connectivity_type, source, destination, direction, connected,
+		cost_per_line, cost_per_unit, price_per_line, price_per_unit)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::numeric/10000, ?::numeric/10000,
+		?::numeric/10000, ?::numeric/10000);");
+
+	# Add pricing for unconnected voice calls
+	$sth->execute('(,)', "Niet-opgenomen oproepen", "VOICE",
+		"t", [], [], [], [], ["f"], 0, 0, 0, 0);
+
 	my $cursor = $collection->find();
 	while(my $pricing = $cursor->next) {
 		my $id = $pricing->{'_id'}->to_string();
@@ -350,12 +360,11 @@ sub import_pricings {
 		if(@$dir > 1) {
 			die "More than one direction allowed, pricing rule cdrtype is ambiguous";
 		}
-
-		my $sth = $dbh->prepare("INSERT INTO pricing (period, description, service,
-			hidden, call_connectivity_type, source, destination, direction, cost_per_line,
-			cost_per_unit, price_per_line, price_per_unit)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::numeric/10000, ?::numeric/10000,
-			?::numeric/10000, ?::numeric/10000);");
+		# 'Connected' was not checked earlier: for voice it must be true, otherwise it must allow any
+		my $conn = [];
+		if(uc($service) eq "VOICE") {
+			$conn = ['t'];
+		}
 
 		my ($costperline, $costperunit, $priceperline, $priceperunit);
 		if($service eq "voice") {
@@ -379,7 +388,7 @@ sub import_pricings {
 		$dest ||= [];
 		$dir ||= [];
 		$sth->execute($period, $pricing->{'description'}, uc($pricing->{'service'}),
-			$pricing->{'hidden'} || "false", $ccv, [], $dest, $dir, $costperline,
+			$pricing->{'hidden'} || "false", $ccv, [], $dest, $dir, $conn, $costperline,
 			$costperunit, $priceperline, $priceperunit);
 
 		my $pricing_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "pricing_id_seq"});

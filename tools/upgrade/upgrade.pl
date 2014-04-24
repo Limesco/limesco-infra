@@ -338,6 +338,7 @@ sub initialize_database {
 			source TEXT[] NOT NULL,
 			destination TEXT[] NOT NULL,
 			direction DIRECTIONTYPE[] NOT NULL,
+			connected BOOLEAN[] NOT NULL,
 
 			cost_per_line MONEY5 NOT NULL, -- used to be cost.perCall/perSms
 			cost_per_unit MONEY5 NOT NULL, -- used to be cost.perMinute/perKilobyte

@@ -145,14 +145,6 @@ sub price_cdr {
 	}
 	$account_id = $account_id->[0];
 
-	# If this is a voice CDR and connected is false, price and cost are always 0
-	if($cdr->{'service'} eq "VOICE" && defined $cdr->{'connected'} && $cdr->{'connected'} == 0) {
-		$cdr->{'computed_price'} = 0;
-		$cdr->{'computed_cost'} = 0;
-		$cdr->{'pricing_info'} = {description => "Unconnected VOICE CDR is always free"};
-		return;
-	}
-
 	# A CDR is unpricable if its phone number has no matching SIM
 	my $is_in = $cdr->{'direction'} && $cdr->{'direction'} eq "IN";
 	my $phone = $is_in ? $cdr->{'to'} : $cdr->{'from'};
@@ -181,8 +173,8 @@ sub price_cdr {
 	$sth = $dbh->prepare("SELECT id, description, cost_per_line, cost_per_unit, price_per_line, price_per_unit "
 		."FROM pricing WHERE service=? AND period @> ?::date AND constraint_list_matches(?, source::text[]) "
 		."AND constraint_list_matches(?, destination::text[]) AND constraint_list_matches(?::text, direction::text[]) "
-		."AND constraint_list_matches(?, call_connectivity_type::text[]);");
-	$sth->execute($cdr->{'service'}, $cdr->{'time'}, $cdr->{'source'}, $cdr->{'destination'}, $cdr->{'direction'}, $callConnectivityType);
+		."AND constraint_list_matches(?, call_connectivity_type::text[]) AND constraint_list_matches(?::boolean::text, connected::text[]);";
+	$sth->execute($cdr->{'service'}, $cdr->{'time'}, $cdr->{'source'}, $cdr->{'destination'}, $cdr->{'direction'}, $callConnectivityType, $cdr->{'connected'});
 	my $pricing_rule = $sth->fetchrow_hashref();
 	if(!$pricing_rule) {
 		die sprintf("This CDR is unpricable: no pricing rule could be found for this CDR");
