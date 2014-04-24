@@ -70,6 +70,7 @@ if(!caller) {
 		foreach(@unpricable_cdrs) {
 			print "  " . dump_cdr($_) . "\n";
 		}
+		print "$pricable_cdrs priced, " . scalar(@unpricable_cdrs) . " are still unpricable.\n";
 	}
 }
 
@@ -189,7 +190,13 @@ sub price_cdr {
 	$sth->execute(@variables);
 	my $pricing_rule = $sth->fetchrow_hashref();
 	if(!$pricing_rule) {
-		die sprintf("This CDR is unpricable: no pricing rule could be found for this CDR");
+		my $i = 0;
+		my $variables = "";
+		foreach(@variables) {
+			$variables .= "  " . (++$i) . ": ";
+			$variables .= defined $_ ? "'$_'\n" : "(undef)\n";
+		}
+		die sprintf("This CDR is unpricable: no pricing rule could be found for this CDR.\nQuery was: %s\nVariables were:\n%s", $query, $variables);
 	}
 	if($sth->fetchrow_hashref()) {
 		if($unpricable_error) {
