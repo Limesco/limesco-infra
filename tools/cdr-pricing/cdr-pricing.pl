@@ -6,10 +6,12 @@ use lib '../lib';
 use lib '../../lib';
 use Limesco;
 use JSON;
+use Try::Tiny;
+use Data::Dumper;
 
 =head1 cdr-pricing.pl
 
-Usage: cdr-pricing.pl [infra-options]
+Usage: cdr-pricing.pl [infra-options] [--cdr id]
 
 * retrieve all unpriced CDRs
 * for each cdr, get the relevant SIM and account
@@ -20,18 +22,28 @@ Usage: cdr-pricing.pl [infra-options]
 =cut
 
 if(!caller) {
+	my $cdr;
 	my $lim = Limesco->new_from_args(\@ARGV, sub {
 		my ($args, $iref) = @_;
 		my $arg = $args->[$$iref];
-		#if($arg eq "--account") {
-		#	$account_id = $args->[++$$iref];
-		#} elsif($arg eq "--date") {
-		#	$date = $args->[++$$iref];
-		if(0) {
+		if($arg eq "--cdr") {
+			$cdr = $args->[++$$iref];
 		} else {
 			return 0;
 		}
 	});
+
+	if($cdr) {
+		$cdr = get_cdr($lim, $cdr);
+		print "Pricing CDR:\n  " . Dumper($cdr) . "\n";
+		try {
+			price_cdr($lim, $cdr);
+			print "After pricing:\n  " . Dumper($cdr) . "\n";
+		} catch {
+			print "Caught exception: $_\n";
+		};
+		exit;
+	}
 
 	my $pricable_cdrs = 0;
 	my @unpricable_cdrs;
@@ -62,6 +74,25 @@ if(!caller) {
 }
 
 =head2 Methods
+
+=head3 get_cdr($lim, $cdr_id)
+
+Fetch a specific CDR from the database.
+
+=cut
+
+sub get_cdr {
+	my ($lim, $cdr_id) = @_;
+	my $dbh = $lim->get_database_handle();
+
+	my $sth = $dbh->prepare("SELECT * FROM cdr WHERE id=?");
+	$sth->execute($cdr_id) or die "Query failed";
+	my $cdr = $sth->fetchrow_hashref();
+	if(!$cdr) {
+		die "Couldn't find a CDR with that id: $cdr_id\n";
+	}
+	return $cdr;
+}
 
 =head3 for_every_unpriced_cdr($lim, $callback)
 
@@ -191,7 +222,7 @@ Return a single-line string with some information that identifies a CDR.
 
 sub dump_cdr {
 	my ($cdr) = @_;
-	return sprintf("ID %d, Call ID %s, date %s %s", $cdr->{'id'}, $cdr->{'call_id'}, $cdr->{'time'}->ymd, $cdr->{'time'}->hms);
+	return sprintf("ID %d, Call ID %s, date %s", $cdr->{'id'}, $cdr->{'call_id'}, $cdr->{'time'});
 }
 
 1;
