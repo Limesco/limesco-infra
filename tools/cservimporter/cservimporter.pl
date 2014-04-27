@@ -67,6 +67,7 @@ sub import_from_cserv_mongo {
 		$dbh->commit;
 		return;
 	} catch {
+		die "Error: $_\n";
 		$dbh->rollback;
 	}
 }
