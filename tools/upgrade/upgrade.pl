@@ -293,7 +293,12 @@ sub initialize_database {
 		$dbh->do("CREATE TABLE invoice_itemline (
 			id SERIAL PRIMARY KEY NOT NULL,
 			type ITEMLINETYPE NOT NULL,
-			invoice_id INVOICEID NOT NULL REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
+
+			queued_for_account_id INTEGER NULL,
+			invoice_id INVOICEID NULL REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
+			CHECK (queued_for_account_id IS NULL OR invoice_id IS NULL),
+			CHECK (queued_for_account_id IS NOT NULL OR invoice_id IS NOT NULL),
+
 			description LONGTEXT NOT NULL,
 			taxrate MONEY8 NOT NULL,
 			rounded_total MONEY2 NOT NULL,

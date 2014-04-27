@@ -64,6 +64,7 @@ sub import_from_cserv_mongo {
 		import_sims($lim, $cservdb, $dbh, $accounts_map);
 		my $pricing_map = import_pricings($lim, $cservdb, $dbh);
 		import_cdrs($lim, $cservdb, $dbh, $accounts_map, $pricing_map);
+		import_queued_itemlines($lim, $cservdb, $dbh, $accounts_map);
 		set_sim_start_dates($lim, $dbh);
 
 		$dbh->commit;
@@ -526,6 +527,36 @@ sub import_cdrs {
 			}
 			print "  $account (" . join(", ", @accounts) . ")\n";
 		}
+	}
+}
+
+=head3 import_queued_itemlines($lim, $database, $dbh, $accounts_map)
+
+Import the queued itemlines from Mongo to Liminfra. The given database is a
+MongoDB::Database pointing at CServ's database; the given dbh is a DBI handle
+pointing at liminfra's database. The dbh must be in transaction state and
+should have an exclusive lock on the 'invoice_itemline' table. The accounts_map
+is a hashref containing CServ account ID's as keys and liminfra account ID's as
+values.
+
+=cut
+
+sub import_queued_itemlines {
+	my ($lim, $cservdb, $dbh, $accounts_map) = @_;
+	my $collection = $cservdb->get_collection("queued_itemlines");
+
+	my $cursor = $collection->find({type => "queued"});
+	while(my $cdr = $cursor->next) {
+		my $sth = $dbh->prepare("INSERT INTO invoice_itemline (type, queued_for_account_id,
+			description, taxrate, rounded_total, item_price, item_count) VALUES
+			('NORMAL', ?, ?, ?, ?::numeric/10000, ?::numeric/10000, ?);");
+
+		my $account_id = $accounts_map->{$cdr->{'queuedForAccountId'}};
+		if(!$account_id) {
+			die "Tried importing queued itemline for account ID " . $cdr->{'queuedForAccountId'} . " but it doesn't exist\n";
+		}
+
+		$sth->execute($account_id, map { $cdr->{$_} } qw/description taxRate totalPrice itemPrice itemCount/);
 	}
 }
 
