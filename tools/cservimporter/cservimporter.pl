@@ -257,7 +257,7 @@ sub import_sims {
 
 =head3 import_invoices($lim, $cservdb, $dbh, $accounts_map)
 
-Import the SIMs from Mongo to Liminfra. The given database is a
+Import the invoices from Mongo to Liminfra. The given database is a
 MongoDB::Database pointing at CServ's database; the given dbh is a DBI handle
 pointing at liminfra's database. The dbh must be in transaction state and
 should have an exclusive lock on the 'invoice' and 'invoice_itemline' tables.
