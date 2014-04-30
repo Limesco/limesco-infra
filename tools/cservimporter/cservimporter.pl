@@ -519,13 +519,16 @@ sub import_cdrs {
 	if(%unlinked_cdrs_map) {
 		print "Unlinked CDR counts for nonexistant accounts:\n";
 		foreach my $account (keys %unlinked_cdrs_map) {
-			my @accounts;
+			my %accounts;
 			foreach my $a(@{$unlinked_cdrs_map{$account}}) {
-				if(!grep {$a eq $_} @accounts) {
-					push @accounts, $a;
-				}
+				$accounts{$a} ||= 0;
+				$accounts{$a} += 1;
 			}
-			print "  $account (" . join(", ", @accounts) . ")\n";
+			my @lines;
+			foreach my $a(keys %accounts) {
+				push @lines, "$a(".$accounts{$a}.")";
+			}
+			print "  $account (" . join(", ", @lines) . ")\n";
 		}
 	}
 }
