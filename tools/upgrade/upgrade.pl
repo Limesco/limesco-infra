@@ -116,7 +116,7 @@ Returns the latest schema version supported by this tool.
 =cut
 
 sub get_latest_schema_version {
-	return 1;
+	return 2;
 }
 
 =head3 ask_confirmation($question)
@@ -385,9 +385,12 @@ sub initialize_database {
 			reason LEGREASON NULL
 		);");
 
+		add_directdebit_tables($lim, $dbh);
+
 		return $dbh->commit();
 	} catch {
 		$dbh->rollback();
+		die $_;
 	}
 }
 
@@ -403,7 +406,69 @@ sub upgrade_database {
 	if($current_version <= 0) {
 		die "upgrade_database cannot initialize a database\n";
 	}
+
+	if($current_version == 1) {
+		add_directdebit_tables();
+	}
 	die "Not implemented";
+}
+
+=head3 add_directdebit_tables($lim, [$dbh])
+
+Add tables related to the directdebiting code. Optionally, give a database
+handle on which the queries will be ran.
+
+=cut
+
+sub add_directdebit_tables {
+	my ($lim, $dbh) = @_;
+	my $dbh_created = !defined($dbh);
+	if($dbh_created) {
+		$dbh = $lim->get_database_handle();
+		$dbh->begin;
+	}
+
+	$dbh->do("CREATE TABLE account_directdebit_info (
+		authorization_id SHORTTEXT NOT NULL,
+		account_id INT NOT NULL,
+		period DATERANGE NOT NULL,
+		bank_account_name SHORTTEXT NOT NULL,
+		iban SHORTTEXT NOT NULL,
+		bic SHORTTEXT NOT NULL,
+		signature_date DATE NOT NULL,
+		CHECK(lower(period) = signature_date),
+
+		PRIMARY KEY (authorization_id),
+		UNIQUE (account_id, period),
+		EXCLUDE USING gist (account_id WITH =, period WITH &&)
+	);");
+
+	$dbh->do("CREATE TYPE ddtransactionstatus AS ENUM('NEW', 'SUCCESS', 'PRESETTLEMENTREJECT', 'POSTSETTLEMENTREJECT');");
+	$dbh->do("CREATE TYPE ddfiletype AS ENUM('FRST', 'RCUR', 'FNAL', 'OOFF');");
+
+	$dbh->do("CREATE TABLE directdebit_file (
+		id SERIAL PRIMARY KEY NOT NULL,
+		creation_date DATE NOT NULL,
+		type DDFILETYPE NOT NULL
+	);");
+
+	$dbh->do("CREATE TABLE directdebit_transaction (
+		id SERIAL NOT NULL,
+		invoice_id INVOICEID NOT NULL REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
+		authorization_id SHORTTEXT NOT NULL REFERENCES account_directdebit_info(authorization_id),
+		status DDTRANSACTIONSTATUS NOT NULL,
+		directdebit_file_id INT NULL REFERENCES directdebit_file(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
+
+		-- No transaction can be successful or failed without being in a directdebit file
+		CHECK(directdebit_file_id IS NOT NULL OR status='NEW'),
+		-- No invoice can be in two transactions of the same status
+		UNIQUE(invoice_id, status)
+	);");
+
+	if($dbh_created) {
+		$dbh->commit;
+		$dbh = undef;
+	}
 }
 
 1;
