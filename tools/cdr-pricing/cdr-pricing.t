@@ -21,28 +21,33 @@ my $dbh = $lim->get_database_handle();
 require('../upgrade/upgrade.pl');
 initialize_database($lim);
 
-my $insert_cdr = $dbh->prepare("INSERT INTO cdr (service, call_id, \"from\", \"to\", speakup_account, time, pricing_info,
+# Insert a single pricing
+$dbh->do("INSERT INTO pricing (period, description, hidden, service, call_connectivity_type, source, destination, direction, connected,
+		cost_per_line, cost_per_unit, price_per_line, price_per_unit) VALUES ('(,)', 'Test pricing', 'f', 'VOICE', '{}', '{First Test Source}', '{}',
+		'{}', '{}', 0, 0, 0, 0)");
+my $null_pricing_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "pricing_id_seq"});
+my $insert_cdr = $dbh->prepare("INSERT INTO cdr (service, call_id, \"from\", \"to\", speakup_account, time, pricing_id, pricing_info,
 	computed_cost, computed_price, units, connected, source, destination, direction, leg, reason)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
 # empty table: no unpricables
 my $unpricable = 0;
 for_every_unpriced_cdr($lim, sub { ++$unpricable });
 is($unpricable, 0, "No unpriced CDRs in empty database");
 
-$insert_cdr->execute("VOICE", "foo", "31600000000", "0", "suaccount", "2012-01-01 01:00:00", "{}", 0.01, 0.01, 1, "t", "Test Source",
+$insert_cdr->execute("VOICE", "foo", "31600000000", "0", "suaccount", "2012-01-01 01:00:00", $null_pricing_id, "{}", 0.01, 0.01, 1, "t", "Test Source",
 	"Test Destination", "OUT", undef, undef);
 $unpricable = 0;
 for_every_unpriced_cdr($lim, sub { ++$unpricable });
 is($unpricable, 0, "No unpriced CDRs in database with priced CDR");
 
-$insert_cdr->execute("VOICE", "foo", "31600000000", "0", "suaccount", "2012-01-02 01:00:00", undef, undef, undef, 1, "t", "Test Source",
+$insert_cdr->execute("VOICE", "foo", "31600000000", "0", "suaccount", "2012-01-02 01:00:00", undef, undef, undef, undef, 1, "t", "Test Source",
 	"Test Destination", "OUT", undef, undef);
 $unpricable = 0;
 for_every_unpriced_cdr($lim, sub { ++$unpricable });
 is($unpricable, 1, "One unpriced CDR in database with priced and unpriced CDR");
 
-$insert_cdr->execute("VOICE", "foo", "31600000000", "0", "suaccount", "2012-01-03 01:00:00", undef, undef, undef, 1, "t", "Test Source",
+$insert_cdr->execute("VOICE", "foo", "31600000000", "0", "suaccount", "2012-01-03 01:00:00", undef, undef, undef, undef, 1, "t", "Test Source",
 	"Test Destination", "OUT", undef, undef);
 $unpricable = 0;
 for_every_unpriced_cdr($lim, sub { ++$unpricable });
@@ -50,7 +55,7 @@ is($unpricable, 2, "Two unpriced CDRs in database with priced and unpriced CDRs"
 
 $dbh->do("TRUNCATE cdr RESTART IDENTITY;");
 
-$insert_cdr->execute("VOICE", "quux", "31600000000", "0", "suaccount", "2012-01-02 01:00:00", undef, undef, undef, 5, "t", "Test Source",
+$insert_cdr->execute("VOICE", "quux", "31600000000", "0", "suaccount", "2012-01-02 01:00:00", undef, undef, undef, undef, 5, "t", "Test Source",
 	"Test Destination", "OUT", undef, undef);
 my $cdr_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "cdr_id_seq"});
 for_every_unpriced_cdr($lim, sub {
@@ -63,6 +68,7 @@ for_every_unpriced_cdr($lim, sub {
 		to => "0",
 		speakup_account => "suaccount",
 		time => "2012-01-02 01:00:00",
+		pricing_id => undef,
 		pricing_info => undef,
 		computed_cost => undef,
 		computed_price => undef,
@@ -97,9 +103,10 @@ is($unpriced_cdr_priced, 0, "Unpriced CDR was unpricable");
 like($exception, qr/\bunpricable\b/, "Unpricable CDR error contains 'unpricable'");
 
 my $insert_pricing = $dbh->prepare("INSERT INTO pricing (period, description, service, hidden,
-	call_connectivity_type, source, destination, direction, cost_per_line, cost_per_unit, price_per_line, price_per_unit)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-$insert_pricing->execute("(,)", "Some Description", "VOICE", "f", ["OOTB"], ["Test Source"], ["Test Destination"], ["OUT"], 1, 10, 2, 20);
+	call_connectivity_type, source, destination, direction, connected, cost_per_line, cost_per_unit, price_per_line, price_per_unit)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+$insert_pricing->execute("(,)", "Some Description", "VOICE", "f", ["OOTB"], ["Test Source"], ["Test Destination"], ["OUT"], ["t"], 1, 10, 2, 20);
+my $pricing_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "pricing_id_seq"});
 
 # without an externalAccount mapping, and without a SIM, this CDR can't be mapped to the right call_connectivity_type
 # so this CDR should still be unpricable
@@ -153,6 +160,7 @@ is_deeply($cdr, {
 	to => "0",
 	speakup_account => "suaccount",
 	time => "2012-01-02 01:00:00",
+	pricing_id => $pricing_id,
 	computed_cost => 51, # 1 per line, 10 per unit, 5 units
 	computed_price => 102, # 2 per line, 20 per unit, 5 units
 	invoice_id => undef,
