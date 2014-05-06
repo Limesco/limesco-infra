@@ -4,6 +4,7 @@ use warnings;
 
 use Test::PostgreSQL;
 use Test::More;
+use Test::XML::Simple;
 use lib 'lib';
 use lib '../lib';
 use lib '../../lib';
@@ -11,7 +12,7 @@ use Limesco;
 use Try::Tiny;
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 46;
+plan tests => 67;
 
 require_ok("directdebit.pl");
 
@@ -274,10 +275,37 @@ mark_directdebit_file($lim, $rcur_file->{'id'}, "SUCCESS");
 is(get_directdebit_transaction($lim, $transaction3->{'id'})->{'status'}, "POSTSETTLEMENTREJECT", "Transaction 3 still marked post-settlement reject");
 is(get_directdebit_transaction($lim, $transaction4->{'id'})->{'status'}, "SUCCESS", "Transaction 4 marked successful");
 
+my $xml = export_directdebit_file($lim, $rcur_file->{'id'});
+xml_valid($xml, "Valid XML exported");
+
+# hack to test if the XML has the namespace
+like($xml, qr%<Document\s+xmlns="urn:iso:std:iso:20022:tech:xsd:pain\.008\.001\.02"\s+xmlns:xsi="http://www\.w3\.org/2001/XMLSchema-instance">%, "XML contains valid namespace");
+# now, remove it so we can access /Document in a sane way in libxml
+$xml =~ s/<Document\s+xmlns="[^"]+"\s+xmlns:xsi="[^"]+">/<Document>/g;
+$xml = XML::LibXML->new->parse_string($xml);
+
+xml_node($xml, '/Document', 'Document root exists');
+xml_is($xml, '/Document/CstmrDrctDbtInitn/GrpHdr/NbOfTxs', 2, "Two transactions in this file");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/GrpHdr/CtrlSum', 650.00, "Currency amount is OK");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/NbOfTxs', 2, "Two transactions in this file (other header)");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/CtrlSum', 650.00, "Currency amount is OK (other header)");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/PmtTpInf/SeqTp', 'RCUR', "File is marked 'recurrent transfer'");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/ReqdColltnDt', '2016-03-04', "Correct processing date is used");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[1]/PmtId/InstrId', '13C000040', "Correct invoice ID is used");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[1]/PmtId/EndToEndId', '13C000040', "Correct invoice ID is used");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[1]/InstdAmt', '250.00', "Correct amount is used");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[1]/DrctDbtTx/MndtRltdInf/MndtId', $authorization, "Correct authorization is used");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[1]/DrctDbtTx/MndtRltdInf/DtOfSgntr', "2013-04-05", "Correct signature date is used");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[1]/DbtrAgt/FinInstnId/BIC', "RABONL2U", "Correct BIC code is used");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[1]/Dbtr/Nm', "Limesco B.V.", "Correct account name is used");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[1]/Dbtr/CtryOfRes', "NL", "Correct country is used");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[1]/DbtrAcct/Id/IBAN', "NL24RABO0169207587", "Correct IBAN number is used");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[2]/PmtId/InstrId', '14C000010', "Correct invoice ID is used");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[2]/PmtId/EndToEndId', '14C000010', "Correct invoice ID is used");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[2]/InstdAmt', '400.00', "Correct amount is used");
+
 # TODO: mark a file as failed -> should lead to a pre-settlement reject on all transactions;
 # an exception must be thrown if any transaction is already marked before this
 # TODO: more authorizations so FRST and RCUR files are combined
-# TODO: implement exporting a directdebit file to XML and check if it matches the
-# expected XML contents
 
 $dbh->disconnect();

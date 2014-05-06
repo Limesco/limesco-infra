@@ -309,4 +309,135 @@ sub get_directdebit_file {
 	return $file;
 }
 
+=head3 export_directdebit_file($lim, $id)
+
+Export a directdebit file to XML. Returns a string containing the XML contents.
+
+=cut
+
+sub export_directdebit_file {
+	my ($lim, $file_id) = @_;
+	my $dbh = $lim->get_database_handle();
+
+	my $file = get_directdebit_file($lim, $file_id);
+	my @transactions;
+	{
+		my $transactions_sth = $dbh->prepare("SELECT * FROM directdebit_transaction
+			FULL JOIN invoice ON directdebit_transaction.invoice_id = invoice.id
+			FULL JOIN account_directdebit_info ON directdebit_transaction.authorization_id = account_directdebit_info.authorization_id
+			WHERE directdebit_file_id=?");
+		$transactions_sth->execute($file_id);
+		while(my $t = $transactions_sth->fetchrow_hashref) {
+			push @transactions, $t;
+		}
+	}
+
+	if(@transactions == 0) {
+		die "No transactions in directdebit file, this is impossible";
+	}
+
+	my @export_xml;
+	push @export_xml,
+		'<?xml version="1.0" encoding="utf-8"?>',
+		'<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.008.001.02"',
+		' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
+		' <CstmrDrctDbtInitn>',
+		'  <GrpHdr>',
+		'   <MsgId>' . $file->{'message_id'} . '</MsgId>',
+		'   <CreDtTm>' . $file->{'creation_date'} . '</CreDtTm>',
+		'   <NbOfTxs>' . scalar @transactions . '</NbOfTxs>';
+	my $sum = 0;
+	grep { $sum += $_->{'rounded_with_taxes'} } @transactions;
+	push @export_xml,
+		'   <CtrlSum>' . $sum . '</CtrlSum>',
+		'   <InitgPty>',
+		'    <Nm>Limesco</Nm>',
+		'   </InitgPty>',
+		'  </GrpHdr>',
+		'  <PmtInf>',
+		'   <PmtInfId>' . $file->{'message_id'} . '</PmtInfId>',
+		'   <PmtMtd>DD</PmtMtd>',
+		'   <BtchBookg>true</BtchBookg>',
+		'   <NbOfTxs>' . scalar @transactions . '</NbOfTxs>',
+		'   <CtrlSum>' . $sum . '</CtrlSum>',
+		'   <PmtTpInf>',
+		'    <SvcLvl>',
+		'     <Cd>SEPA</Cd>',
+		'    </SvcLvl>',
+		'    <LclInstrm>',
+		'     <Cd>CORE</Cd>',
+		'    </LclInstrm>',
+		'    <SeqTp>' . $file->{'type'} . '</SeqTp>',
+		'   </PmtTpInf>',
+		'   <ReqdColltnDt>' . $file->{'processing_date'} . '</ReqdColltnDt>',
+		'   <Cdtr>',
+		# TODO: this should be taken from a configuration file
+		'    <Nm>Limesco B.V.</Nm>',
+		'    <PstlAdr>',
+		'     <Ctry>NL</Ctry>',
+		'     <AdrLine>Sophiaweg 34</AdrLine>',
+		'     <AdrLine>6523NJ Nijmegen</AdrLine>',
+		'    </PstlAdr>',
+		'   </Cdtr>',
+		'   <CdtrAcct>',
+		'    <Id>',
+		'     <IBAN>NL24RABO0169207587</IBAN>',
+		'    </Id>',
+		'    <Ccy>EUR</Ccy>',
+		'   </CdtrAcct>',
+		'   <CdtrAgt>',
+		'    <FinInstnId>',
+		'     <BIC>RABONL2U</BIC>',
+		'    </FinInstnId>',
+		'   </CdtrAgt>',
+		'   <ChrgBr>SLEV</ChrgBr>',
+		'   <CdtrSchmeId>',
+		'    <Id>',
+		'     <PrvtId>',
+		'      <Othr>',
+		'       <Id>NL16LIM552587780000</Id>',
+		'       <SchmeNm>',
+		'        <Prtry>SEPA</Prtry>',
+		'       </SchmeNm>',
+		'      </Othr>',
+		'     </PrvtId>',
+		'    </Id>',
+		'   </CdtrSchmeId>';
+	foreach(@transactions) {
+		push @export_xml,
+			'   <DrctDbtTxInf>',
+			'    <PmtId>',
+			'     <InstrId>' . $_->{'invoice_id'} . '</InstrId>',
+			'     <EndToEndId>' . $_->{'invoice_id'} . '</EndToEndId>',
+			'    </PmtId>',
+			'    <InstdAmt Ccy="EUR">' . $_->{'rounded_with_taxes'} . '</InstdAmt>',
+			'    <DrctDbtTx>',
+			'     <MndtRltdInf>',
+			'      <MndtId>' . $_->{'authorization_id'} . '</MndtId>',
+			'      <DtOfSgntr>' . $_->{'signature_date'} . '</DtOfSgntr>',
+			'     </MndtRltdInf>',
+			'    </DrctDbtTx>',
+			'    <DbtrAgt>',
+			'     <FinInstnId>',
+			'      <BIC>' . $_->{'bic'} . '</BIC>',
+			'     </FinInstnId>',
+			'    </DbtrAgt>',
+			'    <Dbtr>',
+			'     <Nm>' . $_->{'bank_account_name'} . '</Nm>',
+			'     <CtryOfRes>' . substr($_->{'iban'}, 0, 2) . '</CtryOfRes>',
+			'    </Dbtr>',
+			'    <DbtrAcct>',
+			'     <Id>',
+			'      <IBAN>' . $_->{'iban'} . '</IBAN>',
+			'     </Id>',
+			'    </DbtrAcct>',
+			'   </DrctDbtTxInf>';
+	}
+	push @export_xml,
+		'  </PmtInf>',
+		' </CstmrDrctDbtInitn>',
+		'</Document>';
+	return join "\n", @export_xml;
+}
+
 1;
