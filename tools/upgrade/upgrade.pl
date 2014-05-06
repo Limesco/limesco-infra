@@ -5,6 +5,7 @@ use lib 'lib';
 use lib '../lib';
 use lib '../../lib';
 use Limesco;
+use Try::Tiny;
 
 =head1 upgrade.pl
 
@@ -117,6 +118,20 @@ Returns the latest schema version supported by this tool.
 
 sub get_latest_schema_version {
 	return 2;
+}
+
+=head3 update_schema_version($lim, $dbh, $version)
+
+Update the in-database schema version to the given parameter. Only for use
+inside the upgrade tool.
+
+=cut
+
+sub update_schema_version {
+	my ($lim, $dbh, $version) = @_;
+
+	$dbh->do("UPDATE meta SET period=daterange(lower(period), 'today') where upper_inf(period);");
+	$dbh->do("INSERT INTO meta (period, schema_version) VALUES ('[today,)', ?)", undef, $version);
 }
 
 =head3 ask_confirmation($question)
@@ -407,26 +422,38 @@ sub upgrade_database {
 		die "upgrade_database cannot initialize a database\n";
 	}
 
-	if($current_version == 1) {
-		add_directdebit_tables();
-	}
-	die "Not implemented";
+	my $dbh = $lim->get_database_handle();
+	$dbh->begin_work;
+
+	try {
+		$dbh->do("LOCK TABLE meta;");
+
+		# Disable CREATE TABLE notices for this transaction only
+		$dbh->do("SET LOCAL client_min_messages='WARNING';");
+
+		if($current_version == 1) {
+			add_directdebit_tables($lim, $dbh);
+			update_schema_version($lim, $dbh, 2);
+		} else {
+			die "Not implemented";
+		}
+
+		$dbh->commit;
+	} catch {
+		$dbh->rollback;
+		die $_;
+	};
 }
 
-=head3 add_directdebit_tables($lim, [$dbh])
+=head3 add_directdebit_tables($lim, $dbh)
 
-Add tables related to the directdebiting code. Optionally, give a database
-handle on which the queries will be ran.
+Add tables related to the directdebiting code. $dbh is the database handle
+on which the queries will be ran.
 
 =cut
 
 sub add_directdebit_tables {
 	my ($lim, $dbh) = @_;
-	my $dbh_created = !defined($dbh);
-	if($dbh_created) {
-		$dbh = $lim->get_database_handle();
-		$dbh->begin;
-	}
 
 	$dbh->do("CREATE TABLE account_directdebit_info (
 		authorization_id SHORTTEXT NOT NULL,
@@ -466,11 +493,6 @@ sub add_directdebit_tables {
 		-- No invoice can be in two transactions of the same status
 		UNIQUE(invoice_id, status)
 	);");
-
-	if($dbh_created) {
-		$dbh->commit;
-		$dbh = undef;
-	}
 }
 
 1;

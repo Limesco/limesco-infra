@@ -11,7 +11,7 @@ use Limesco;
 use Try::Tiny;
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 28;
+plan tests => 31;
 
 require_ok("upgrade.pl");
 ok(get_latest_schema_version(), "Latest schema version is a true value");
@@ -131,5 +131,22 @@ try {
 };
 ok(defined $current_schema_version && $current_schema_version > 0, "current schema version is set");
 ok($current_schema_version == get_latest_schema_version(), "schema is initialized to latest version");
+
+try {
+	update_schema_version($lim, $dbh, 4);
+	pass("update didn't throw");
+} catch {
+	diag($_);
+	fail("update didn't throw");
+};
+
+undef $current_schema_version;
+try {
+	$current_schema_version = get_current_schema_version($lim);
+	pass("didn't throw");
+} catch {
+	fail("didn't throw");
+};
+ok(defined $current_schema_version && $current_schema_version == 4, "current schema version is set");
 
 $dbh->disconnect();
