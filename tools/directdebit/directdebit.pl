@@ -39,7 +39,7 @@ sub generate_directdebit_authorization {
 	my $random = int(rand(1 << 32));
 	my $binary = pack("N NX lXX NX", $time, $machine_id, $process_id, $random);
 	my $str = "";
-	for(0..length($binary)) {
+	for(0..length($binary)-1) {
 		$str .= sprintf("%02x", ord(substr($binary, $_, 1)));
 	}
 	return $str;
