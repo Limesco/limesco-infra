@@ -95,4 +95,36 @@ sub get_account {
 	return $account;
 }
 
+sub get_account_like {
+	my ($self, $string) = @_;
+	my $dbh = $self->get_database_handle();
+
+	my @words = split /\s/, $string;
+	my @accounts;
+	my $sth = $dbh->prepare("SELECT id, concat(company_name, ' ', first_name, ' ', last_name, ' ',
+		first_name, ' ', company_name, ' ', last_name, ' ', company_name), state FROM account");
+	$sth->execute();
+	while(my $row = $sth->fetchrow_arrayref()) {
+		push @accounts, [@$row];
+	}
+
+	foreach my $word (@words) {
+		$word = lc($word);
+		@accounts = grep { lc($_->[1]) =~ /\Q$word\E/ } @accounts;
+		if(@accounts == 0) {
+			die "No accounts match '$string'\n";
+		}
+	}
+
+	if(@accounts == 1) {
+		return $self->get_account($accounts[0][0]);
+	} else {
+		my $error = "Multiple accounts match '$string'\n";
+		foreach(@accounts) {
+			$error .= sprintf("% 4d %15s  %s\n", $_->[0], $_->[2], $_->[1]);
+		}
+		die $error;
+	}
+}
+
 1;

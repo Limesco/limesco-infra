@@ -48,7 +48,7 @@ if(!caller) {
 		for(my $i = 0; $i < @account_ids; ++$i) {
 			if($account_ids[$i] !~ /^\d+$/) {
 				# Not just numbers, try to convert it to an account ID
-				$account_ids[$i] = find_account_like($lim, $account_ids[$i]);
+				$account_ids[$i] = $lim->get_account_like($account_ids[$i])->{'id'};
 			}
 		}
 	}
@@ -92,42 +92,6 @@ sub get_all_active_account_ids {
 		push @accounts, $row->[0];
 	}
 	return @accounts;
-}
-
-=head3 find_account_like($lim, $string)
-
-=cut
-
-sub find_account_like {
-	my ($lim, $string) = @_;
-	my $dbh = $lim->get_database_handle();
-
-	my @words = split /\s/, $string;
-	my @accounts;
-	my $sth = $dbh->prepare("SELECT id, concat(company_name, ' ', first_name, ' ', last_name, ' ',
-		first_name, ' ', company_name, ' ', last_name, ' ', company_name), state FROM account");
-	$sth->execute();
-	while(my $row = $sth->fetchrow_arrayref()) {
-		push @accounts, [@$row];
-	}
-
-	foreach my $word (@words) {
-		$word = lc($word);
-		@accounts = grep { lc($_->[1]) =~ /\Q$word\E/ } @accounts;
-		if(@accounts == 0) {
-			die "No accounts match '$string'\n";
-		}
-	}
-
-	if(@accounts == 1) {
-		return $accounts[0][0];
-	} else {
-		my $error = "Multiple accounts match '$string'\n";
-		foreach(@accounts) {
-			$error .= sprintf("% 4d %15s  %s\n", $_->[0], $_->[2], $_->[1]);
-		}
-		die $error;
-	}
 }
 
 =head3 find_next_invoice_id($dbh, $currentdate, [$invoice_digits])
