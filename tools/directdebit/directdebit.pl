@@ -193,7 +193,7 @@ sub create_directdebit_file {
 		my $transactions_claimed = 0;
 		while(my $transaction = $sth->fetchrow_hashref) {
 			# Is it a FRST- or RCUR-type transaction?
-			$previous_transaction_count_sth->execute($_->{'authorization_id'});
+			$previous_transaction_count_sth->execute($transaction->{'authorization_id'});
 			my $count = $previous_transaction_count_sth->fetchrow_arrayref->[0];
 
 			my $transactiontype = $count > 0 ? "RCUR" : "FRST";
