@@ -72,16 +72,11 @@ sub add_directdebit_account {
 	}
 
 	my $dbh = $lim->get_database_handle();
-	my $sth = $dbh->prepare("SELECT * FROM account WHERE id=?");
-	$sth->execute($account_id);
-	my $account = $sth->fetchrow_hashref;
-	if(!$account) {
-		die "No such account";
-	}
+	my $account = $lim->get_account($account_id);
 
 	$enddate ||= "";
 	my $period = "[$date,$enddate)";
-	$sth = $dbh->prepare("INSERT INTO account_directdebit_info (authorization_id, account_id,
+	my $sth = $dbh->prepare("INSERT INTO account_directdebit_info (authorization_id, account_id,
 		period, bank_account_name, iban, bic, signature_date) VALUES (?, ?, ?, ?, ?, ?, ?);");
 	$sth->execute($authorization, $account_id, $period, $account_name, $iban, $bic, $date);
 }

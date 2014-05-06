@@ -83,4 +83,16 @@ sub read_config {
 	return $config;
 }
 
+sub get_account {
+	my ($self, $account_id) = @_;
+	my $dbh = $self->get_database_handle();
+	my $sth = $dbh->prepare("SELECT * FROM account WHERE id=?");
+	$sth->execute($account_id);
+	my $account = $sth->fetchrow_hashref;
+	if(!$account) {
+		die "No such account";
+	}
+	return $account;
+}
+
 1;
