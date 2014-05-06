@@ -207,7 +207,7 @@ sub create_directdebit_file {
 		}
 
 		# Create the file
-		$dbh->do("INSERT INTO directdebit_file (creation_date, processing_date, type) VALUES ('today', ?, ?)", undef, $processing_date, $filetype);
+		$dbh->do("INSERT INTO directdebit_file (message_id, creation_date, processing_date, type) VALUES (CONCAT('LDD-', 'today'::date, '-', ?::text), 'today', ?, ?)", undef, $filetype, $processing_date, $filetype);
 		my $dd_file_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "directdebit_file_id_seq"});
 
 		# Prepare retrieving transaction information
