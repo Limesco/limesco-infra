@@ -11,7 +11,7 @@ use Limesco;
 use Try::Tiny;
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 42;
+plan tests => 45;
 
 require_ok("directdebit.pl");
 
@@ -266,12 +266,16 @@ ok(!defined($exception), "No exception thrown while creating a RCUR file after a
 is(get_directdebit_transaction($lim, $transaction3->{'id'})->{'directdebit_file_id'}, $rcur_file->{'id'}, "Transaction 3 added to file");
 is(get_directdebit_transaction($lim, $transaction4->{'id'})->{'directdebit_file_id'}, $rcur_file->{'id'}, "Transaction 4 added to file");
 
-# TODO: more authorizations so FRST and RCUR files are combined
-# TODO: succeeded files: transactions should be marked succeeded
-# TODO: failed files should lead to pre-settlement reject on all transactions
-# (also test these situations with existing succeeded or failed transactions and files
-#  in the database to see if these are also handled correctly)
+# Can we mark a single transaction and then mark the rest of the file?
+mark_directdebit_transaction($lim, $transaction3->{'id'}, "POSTSETTLEMENTREJECT");
+is(get_directdebit_transaction($lim, $transaction3->{'id'})->{'status'}, "POSTSETTLEMENTREJECT", "Transaction 3 marked post-settlement reject");
+mark_directdebit_file($lim, $rcur_file->{'id'}, "SUCCESS");
+is(get_directdebit_transaction($lim, $transaction3->{'id'})->{'status'}, "POSTSETTLEMENTREJECT", "Transaction 3 still marked post-settlement reject");
+is(get_directdebit_transaction($lim, $transaction4->{'id'})->{'status'}, "SUCCESS", "Transaction 4 marked successful");
 
+# TODO: mark a file as failed -> should lead to a pre-settlement reject on all transactions;
+# an exception must be thrown if any transaction is already marked before this
+# TODO: more authorizations so FRST and RCUR files are combined
 # TODO: implement exporting a directdebit file to XML and check if it matches the
 # expected XML contents
 

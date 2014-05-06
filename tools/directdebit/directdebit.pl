@@ -234,6 +234,51 @@ sub create_directdebit_file {
 	};
 }
 
+=head3 mark_directdebit_file($lim, $file_id, $status)
+
+Change the status of a given directdebit file, i.e. mark it SUCCESS, or
+PRESETTLEMENTREJECT. Marking a whole file POSTSETTLEMENTREJECT is impossible.
+If a file is marked SUCCESS, existing marks for transactions will not be
+changed. If a file is marked PRESETTLEMENTREJECT, all transactions in the file
+must still be NEW.
+
+The logic behind this is that a file is checked by the local bank, while
+individual transactions are checked by the local bank and by the remote bank. A
+file can either completely succeed or completely fail; it can only completely
+fail at the local bank, in which case the transactions will not be sent to the
+remote bank i.e. a post-settlement reject is impossible. If a file fails, all
+transactions will be lost as if they never existed, which has the same
+semantics as a pre-settlement reject for all transactions. However, if a file
+succeeded, it is possible that some of the transactions in it have been
+rejected (a partial success).
+
+=cut
+
+sub mark_directdebit_file {
+	my ($lim, $file_id, $status) = @_;
+
+	if($status ne "SUCCESS" && $status ne "PRESETTLEMENTREJECT") {
+		die "Status in mark_directdebit_file must be SUCCESS or PRESETTLEMENTREJECT";
+	}
+
+	my $dbh = $lim->get_database_handle();
+	$dbh->begin_work;
+	$dbh->do("LOCK TABLE directdebit_transaction;");
+
+	if($status eq "PRESETTLEMENTREJECT") {
+		my $sth = $dbh->prepare("SELECT COUNT(id) FROM directdebit_transaction WHERE directdebit_file_id=? AND status <> 'NEW'");
+		$sth->execute($file_id);
+		my $count = $sth->fetchrow_arrayref->[0];
+		if($count != 0) {
+			die "A file cannot be marked PRESETTLEMENTREJECT if it already has marked transactions";
+		}
+	}
+
+	my $sth = $dbh->prepare("UPDATE directdebit_transaction SET status=? WHERE directdebit_file_id=? AND status='NEW'");
+	$sth->execute($status, $file_id);
+	$dbh->commit;
+}
+
 =head3 get_directdebit_file($lim, $id)
 
 Retrieve directdebit file information from the database.
