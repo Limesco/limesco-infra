@@ -7,6 +7,7 @@ use lib '../../lib';
 use Limesco;
 use Digest::MD5 qw(md5);
 use Sys::Hostname;
+use DateTime;
 
 =head1 directdebit.pl
 
@@ -170,7 +171,7 @@ sub get_directdebit_transaction {
 	return $transaction;
 }
 
-=head3 create_directdebit_file($lim, $filetype)
+=head3 create_directdebit_file($lim, $filetype, [$processing_date])
 
 Bundle transactions into a directdebit file. A file must only have first-time
 or recurring transactions; the type of file you want is indicated by the
@@ -178,12 +179,18 @@ $filetype parameter which must either be equal to 'FRST' for a first-time
 transaction file or 'RCUR' to include only recurring transactions. If you have
 transactions of both types, generate both files.
 
+The processing date is optional; if not given it will be today + 14 days. In
+European Direct Debit rules, it must be at least six working days in the future
+for 'FRST' type files and at least three working days in the future for 'RCUR'
+type files. This method does not check that the processing date you give is
+correct according to this rule.
+
 This method throws an exception when no transactions were found of this type.
 
 =cut
 
 sub create_directdebit_file {
-	my ($lim, $filetype) = @_;
+	my ($lim, $filetype, $processing_date) = @_;
 
 	if($filetype ne 'RCUR' && $filetype ne 'FRST') {
 		die "Not implemented for file type $filetype, only RCUR and FRST are implemented";
@@ -195,8 +202,12 @@ sub create_directdebit_file {
 		$dbh->do("LOCK TABLE directdebit_file;");
 		$dbh->do("LOCK TABLE directdebit_transaction;");
 
+		if(!$processing_date) {
+			$processing_date = DateTime->now->add(days => 14)->ymd();
+		}
+
 		# Create the file
-		$dbh->do("INSERT INTO directdebit_file (creation_date, type) VALUES ('today', ?)", undef, $filetype);
+		$dbh->do("INSERT INTO directdebit_file (creation_date, processing_date, type) VALUES ('today', ?, ?)", undef, $processing_date, $filetype);
 		my $dd_file_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "directdebit_file_id_seq"});
 
 		# Prepare retrieving transaction information

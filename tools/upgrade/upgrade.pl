@@ -449,6 +449,7 @@ sub add_directdebit_tables {
 	$dbh->do("CREATE TABLE directdebit_file (
 		id SERIAL PRIMARY KEY NOT NULL,
 		creation_date DATE NOT NULL,
+		processing_date DATE NOT NULL,
 		type DDFILETYPE NOT NULL
 	);");
 

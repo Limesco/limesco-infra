@@ -11,7 +11,7 @@ use Limesco;
 use Try::Tiny;
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 45;
+plan tests => 46;
 
 require_ok("directdebit.pl");
 
@@ -182,7 +182,8 @@ try {
 ok($exception, "Exception thrown while creating a recurring files with only first-time transactions");
 
 # Both transactions added to file?
-my $file = create_directdebit_file($lim, "FRST");
+my $file = create_directdebit_file($lim, "FRST", "2015-01-02");
+is($file->{'processing_date'}, "2015-01-02", "Processing date is set correctly");
 is(get_directdebit_transaction($lim, $transaction1->{'id'})->{'directdebit_file_id'}, $file->{'id'}, "Transaction 1 added to file");
 is(get_directdebit_transaction($lim, $transaction2->{'id'})->{'directdebit_file_id'}, $file->{'id'}, "Transaction 2 added to file");
 is_deeply($file, get_directdebit_file($lim, $file->{'id'}), "Returned file is exactly the same as retrieved file");
@@ -254,7 +255,7 @@ ok($exception, "Exception thrown while creating a FRST file after a post-settlem
 $exception = undef;
 my $rcur_file;
 try {
-	$rcur_file = create_directdebit_file($lim, "RCUR");
+	$rcur_file = create_directdebit_file($lim, "RCUR", "2016-03-04");
 } catch {
 	$rcur_file = {};
 	$exception = $_;
