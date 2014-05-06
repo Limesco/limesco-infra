@@ -31,13 +31,17 @@ BIC numbers.
 =cut
 
 sub generate_directdebit_authorization {
+	my ($lim) = @_;
 	# This code was heavily inspired by BSON ObjectID generation from bson-ruby
 	use bytes;
 	my $time = time();
 	my $machine_id = (unpack("N", md5(hostname)))[0];
 	my $process_id = $$;
 	my $random = int(rand(1 << 32));
-	my $binary = pack("N NX lXX NX", $time, $machine_id, $process_id, $random);
+	my $ac = \($lim->{directdebit}{authorization_counter});
+	$$ac = int(rand((1 << 8) - 1)) if(!$$ac || $$ac >= (1 << 8) - 1);
+	my $counter = ++($$ac);
+	my $binary = pack("N NX lXX n C", $time, $machine_id, $process_id, $random, $counter);
 	my $str = "";
 	for(0..length($binary)-1) {
 		$str .= sprintf("%02x", ord(substr($binary, $_, 1)));
