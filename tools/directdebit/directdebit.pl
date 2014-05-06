@@ -133,6 +133,20 @@ sub create_directdebit_transaction {
 	};
 }
 
+=head3 mark_directdebit_transaction($lim, $transaction_id, $status)
+
+Change the status of a given directdebit transaction, i.e. mark it SUCCESS,
+PRESETTLEMENTREJECT or POSTSETTLEMENTREJECT.
+
+=cut
+
+sub mark_directdebit_transaction {
+	my ($lim, $transaction_id, $status) = @_;
+	my $dbh = $lim->get_database_handle();
+	my $sth = $dbh->prepare("UPDATE directdebit_transaction SET status=? WHERE id=?");
+	$sth->execute($status, $transaction_id);
+}
+
 =head3 get_directdebit_transaction($lim, $transaction_id)
 
 Return a directdebit transaction created earlier using create_directdebit_transaction.

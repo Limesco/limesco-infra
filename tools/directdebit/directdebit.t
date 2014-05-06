@@ -11,7 +11,7 @@ use Limesco;
 use Try::Tiny;
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 26;
+plan tests => 42;
 
 require_ok("directdebit.pl");
 
@@ -200,11 +200,74 @@ ok($exception, "Exception thrown while creating a file without any new transacti
 is(get_directdebit_transaction($lim, $transaction1->{'id'})->{'directdebit_file_id'}, $file->{'id'}, "Transaction 1 not changed");
 is(get_directdebit_transaction($lim, $transaction2->{'id'})->{'directdebit_file_id'}, $file->{'id'}, "Transaction 2 not changed");
 
+mark_directdebit_transaction($lim, $transaction1->{'id'}, "PRESETTLEMENTREJECT");
+is(get_directdebit_transaction($lim, $transaction1->{'id'})->{'status'}, "PRESETTLEMENTREJECT", "Transaction 1 marked pre-settlement reject");
+mark_directdebit_transaction($lim, $transaction2->{'id'}, "POSTSETTLEMENTREJECT");
+is(get_directdebit_transaction($lim, $transaction2->{'id'})->{'status'}, "POSTSETTLEMENTREJECT", "Transaction 2 marked post-settlement reject");
+
+# A post-settlement and pre-settlement reject means one transaction in this
+# authorization did come through to the bank, so next transactions must be RCUR
+
+# No transactions claimable for a new file now
+$exception = undef;
+try {
+	my $file = create_directdebit_file($lim, "FRST");
+} catch {
+	$exception = $_;
+};
+
+ok($exception, "Exception thrown while creating a FRST file after two rejects");
+
+$exception = undef;
+try {
+	my $file = create_directdebit_file($lim, "RCUR");
+} catch {
+	$exception = $_;
+};
+
+ok($exception, "Exception thrown while creating a RCUR file after two rejects");
+
+# Select new invoices for new transactions
+@invoices = select_directdebit_invoices($lim, $authorization);
+is(scalar @invoices, 2, "Two invoices in directdebit authorization after two rejects");
+is($invoices[0]{'id'}, "13C000040", "Correct invoice 1 in directdebit authorization selected");
+is($invoices[1]{'id'}, "14C000010", "Correct invoice 2 in directdebit authorization selected");
+
+# Create transactions from the invoices
+my $transaction3 = create_directdebit_transaction($lim, $authorization, $invoices[0]);
+my $transaction4 = create_directdebit_transaction($lim, $authorization, $invoices[1]);
+isnt($transaction1->{'id'}, $transaction3->{'id'}, "Different transaction ID's");
+isnt($transaction2->{'id'}, $transaction3->{'id'}, "Different transaction ID's");
+isnt($transaction1->{'id'}, $transaction4->{'id'}, "Different transaction ID's");
+isnt($transaction2->{'id'}, $transaction4->{'id'}, "Different transaction ID's");
+isnt($transaction3->{'id'}, $transaction4->{'id'}, "Different transaction ID's");
+
+$exception = undef;
+try {
+	my $file = create_directdebit_file($lim, "FRST");
+} catch {
+	$exception = $_;
+};
+
+ok($exception, "Exception thrown while creating a FRST file after a post-settlement reject");
+
+$exception = undef;
+my $rcur_file;
+try {
+	$rcur_file = create_directdebit_file($lim, "RCUR");
+} catch {
+	$rcur_file = {};
+	$exception = $_;
+};
+
+ok(!defined($exception), "No exception thrown while creating a RCUR file after a post-settlement reject");
+
+# Both transactions added to the new file?
+is(get_directdebit_transaction($lim, $transaction3->{'id'})->{'directdebit_file_id'}, $rcur_file->{'id'}, "Transaction 3 added to file");
+is(get_directdebit_transaction($lim, $transaction4->{'id'})->{'directdebit_file_id'}, $rcur_file->{'id'}, "Transaction 4 added to file");
+
+# TODO: more authorizations so FRST and RCUR files are combined
 # TODO: succeeded files: transactions should be marked succeeded
-# TODO: failed transactions (pre and post settlement rejects)
-# the code should try creating new transactions for these invoices; these transactions
-# should belong to RCUR files in the case of a post settlement reject and FRST files in
-# the case of a pre-settlement reject, unless an earlier transaction was succesful
 # TODO: failed files should lead to pre-settlement reject on all transactions
 # (also test these situations with existing succeeded or failed transactions and files
 #  in the database to see if these are also handled correctly)
