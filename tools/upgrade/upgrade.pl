@@ -478,7 +478,8 @@ sub add_directdebit_tables {
 		message_id SHORTTEXT NOT NULL,
 		creation_time TIMESTAMP WITHOUT TIME ZONE NOT NULL,
 		processing_date DATE NOT NULL,
-		type DDFILETYPE NOT NULL
+		type DDFILETYPE NOT NULL,
+		UNIQUE(message_id)
 	);");
 
 	$dbh->do("CREATE TABLE directdebit_transaction (
