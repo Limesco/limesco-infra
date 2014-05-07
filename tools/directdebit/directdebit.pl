@@ -84,8 +84,9 @@ sub add_directdebit_account {
 =head3 select_directdebit_invoices($lim, $authorization)
 
 Select all invoices for the given authorization code. Note: does not check if
-an invoice is already paid for, all invoices within a given authorization are
-selected and returned.
+an invoice is already paid for otherwise than directdebit, all invoices within
+a given authorization are selected and returned unless they are already in a
+non-failure directdebit transaction.
 
 =cut
 
@@ -96,7 +97,8 @@ sub select_directdebit_invoices {
 	# Find all invoices whose date is within the period of this authorization, belonging to this account
 	my $sth = $dbh->prepare("SELECT * FROM invoice WHERE"
 		." account_id = (SELECT account_id FROM account_directdebit_info WHERE authorization_id=?) AND"
-		." date <@ (SELECT period FROM account_directdebit_info WHERE authorization_id=?);");
+		." date <@ (SELECT period FROM account_directdebit_info WHERE authorization_id=?) AND"
+		." NOT EXISTS (SELECT invoice_id FROM directdebit_transaction WHERE invoice_id=invoice.id AND (status='SUCCESS' OR status='NEW'));");
 	$sth->execute($authorization, $authorization);
 	my @invoices;
 	while(my $invoice = $sth->fetchrow_hashref) {

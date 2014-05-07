@@ -307,5 +307,6 @@ xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[2]/InstdAmt', '400
 # TODO: mark a file as failed -> should lead to a pre-settlement reject on all transactions;
 # an exception must be thrown if any transaction is already marked before this
 # TODO: more authorizations so FRST and RCUR files are combined
+# TODO: select_directdebit_invoices may only return invoices that are not already in a SUCCESS or NEW transaction
 
 $dbh->disconnect();
