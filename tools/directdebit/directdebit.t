@@ -12,7 +12,7 @@ use Limesco;
 use Try::Tiny;
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 68;
+plan tests => 69;
 
 require_ok("directdebit.pl");
 
@@ -85,6 +85,18 @@ try {
 };
 
 ok($exception, "Exception thrown with wrong date");
+
+$exception = undef;
+try {
+	add_directdebit_account($lim, $account_id,
+		$authorization, 'Limesco B.V.',
+		'NL24RABO0169307587', 'RABONL2U',
+		'2013-04-05');
+} catch {
+	$exception = $_;
+};
+
+ok($exception, "Exception thrown when IBAN number incorrect");
 
 $exception = undef;
 try {
