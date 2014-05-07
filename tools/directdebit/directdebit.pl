@@ -202,7 +202,7 @@ sub create_directdebit_file {
 		}
 
 		# Create the file
-		$dbh->do("INSERT INTO directdebit_file (message_id, creation_date, processing_date, type) VALUES (CONCAT('LDD-', 'today'::date, '-', ?::text), 'today', ?, ?)", undef, $filetype, $processing_date, $filetype);
+		$dbh->do("INSERT INTO directdebit_file (message_id, creation_time, processing_date, type) VALUES (CONCAT('LDD-', 'today'::date, '-', ?::text), 'now', ?, ?)", undef, $filetype, $processing_date, $filetype);
 		my $dd_file_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "directdebit_file_id_seq"});
 
 		# Prepare retrieving transaction information
@@ -331,6 +331,8 @@ sub export_directdebit_file {
 		die "No transactions in directdebit file, this is impossible";
 	}
 
+	$file->{'creation_time'} =~ s/ /T/;
+
 	my @export_xml;
 	push @export_xml,
 		'<?xml version="1.0" encoding="utf-8"?>',
@@ -339,7 +341,7 @@ sub export_directdebit_file {
 		' <CstmrDrctDbtInitn>',
 		'  <GrpHdr>',
 		'   <MsgId>' . $file->{'message_id'} . '</MsgId>',
-		'   <CreDtTm>' . $file->{'creation_date'} . '</CreDtTm>',
+		'   <CreDtTm>' . $file->{'creation_time'} . '</CreDtTm>',
 		'   <NbOfTxs>' . scalar @transactions . '</NbOfTxs>';
 	my $sum = 0;
 	grep { $sum += $_->{'rounded_with_taxes'} } @transactions;
