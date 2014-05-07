@@ -206,7 +206,7 @@ sub create_directdebit_file {
 		my $dd_file_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "directdebit_file_id_seq"});
 
 		# Prepare retrieving transaction information
-		my $previous_transaction_count_sth = $dbh->prepare("SELECT COUNT(id) FROM directdebit_transaction WHERE status='SUCCESS' OR status='POSTSETTLEMENTREJECT' AND authorization_id=?");
+		my $previous_transaction_count_sth = $dbh->prepare("SELECT COUNT(id) FROM directdebit_transaction WHERE (status='SUCCESS' OR status='POSTSETTLEMENTREJECT') AND authorization_id=?");
 		# Prepare claiming the transaction for our file
 		my $claim_transaction_sth = $dbh->prepare("UPDATE directdebit_transaction SET directdebit_file_id=? WHERE id=?");
 
