@@ -12,7 +12,7 @@ use Limesco;
 use Try::Tiny;
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 67;
+plan tests => 68;
 
 require_ok("directdebit.pl");
 
@@ -122,6 +122,8 @@ try {
 } catch {
 	$exception = $_;
 };
+
+ok($exception, "Exception thrown when adding overlapping date ranges");
 
 # selecteer facturen voor dit machtingskenmerk
 # authorization -> account_id, datum
