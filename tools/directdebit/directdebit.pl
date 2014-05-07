@@ -8,16 +8,105 @@ use Limesco;
 use Digest::MD5 qw(md5);
 use Sys::Hostname;
 use DateTime;
+use Try::Tiny;
 
 =head1 directdebit.pl
 
-Usage: directdebit.pl [infra-options]
+Usage: directdebit.pl <--collect | --generate | --export id> [--processing-date yyyy-mm-dd] [infra-options]
+
+If --collect is given, this tool creates directdebit files. It takes all
+invoices for which a valid directdebit authorization exists and which have not
+been collected through directdebit yet, creates transactions for them and files
+for those transactions. The files are written as LDD-date-FRST.xml and
+LDD-date-RCUR.xml.  If no transactions existed for a type, no file is written.
+--processing-date can be given to write another date for directdebit processing
+in the XML files.
+
+If --generate is given, generates a directdebit authentication id and exits.
+
+If --export is given, writes an XML file for the given directdebit file or
+message ID.
 
 =cut
 
 if(!caller) {
-	my $lim = Limesco->new_from_args(\@ARGV);
-	print generate_directdebit_authorization($lim) . "\n";
+	my $generate;
+	my $collect;
+	my $export;
+
+	my $processing_date;
+	my $lim = Limesco->new_from_args(\@ARGV, sub {
+		my ($args, $iref) = @_;
+		my $arg = $args->[$$iref];
+		if($arg eq "--generate") {
+			$generate = 1;
+		} elsif($arg eq "--collect") {
+			$collect = 1;
+		} elsif($arg eq "--processing-date") {
+			$processing_date = $args->[++$$iref];
+		} elsif($arg eq "--export") {
+			$export = $args->[++$$iref];
+		} else {
+			return 0;
+		}
+	});
+
+	if($generate) {
+		print generate_directdebit_authorization($lim) . "\n";
+		exit(0);
+	}
+
+	if($collect) {
+		my @auths = get_active_directdebit_authorizations($lim);
+		foreach my $authorization (@auths) {
+			my @invoices = select_directdebit_invoices($lim, $authorization);
+			foreach my $invoice (@invoices) {
+				create_directdebit_transaction($lim, $authorization, $invoice);
+			}
+		}
+		try {
+			my $file = create_directdebit_file($lim, "FRST", $processing_date);
+			my $filename = $file->{'message_id'} . ".xml";
+			my $xml = export_directdebit_file($lim, $file->{'id'});
+			open my $fh, '>', $filename or die $!;
+			print $fh $xml;
+			close $fh;
+			print "FRST file written to $filename.\n";
+		} catch {
+			print "Failed to create FRST file: $_";
+		};
+		try {
+			my $file = create_directdebit_file($lim, "RCUR", $processing_date);
+			my $filename = $file->{'message_id'} . ".xml";
+			my $xml = export_directdebit_file($lim, $file->{'id'});
+			open my $fh, '>', $filename or die $!;
+			print $fh $xml;
+			close $fh;
+			print "RCUR file written to $filename.\n";
+		} catch {
+			print "Failed to create RCUR file: $_";
+		};
+		exit(0);
+	}
+
+	if($export) {
+		my $file;
+		if($export =~ /^LDD/) {
+			$file = get_directdebit_file_by_message_id($lim, $export);
+		} else {
+			$file = get_directdebit_file($lim, $export);
+		}
+		my $filename = $file->{'message_id'} . ".xml";
+		my $xml = export_directdebit_file($lim, $file->{'id'});
+		open my $fh, '>', $filename or die $!;
+		print $fh $xml;
+		close $fh;
+		print "Directdebit file written to $filename.\n";
+		exit(0);
+	}
+
+	print "One of the --collect, --generate or --export options is required.\n";
+	exit(1);
 }
 
 =head2 Methods
