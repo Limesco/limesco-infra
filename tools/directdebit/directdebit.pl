@@ -81,6 +81,26 @@ sub add_directdebit_account {
 	$sth->execute($authorization, $account_id, $period, $account_name, $iban, $bic, $date);
 }
 
+=head3 get_active_directdebit_authorizations($lim)
+
+Returns a list of all active directdebit authorizations.
+
+=cut
+
+sub get_active_directdebit_authorizations {
+	my ($lim) = @_;
+	my $dbh = $lim->get_database_handle();
+
+	# Find all invoices whose date is within the period of this authorization, belonging to this account
+	my $sth = $dbh->prepare("SELECT authorization_id FROM account_directdebit_info WHERE period @> 'now'::date");
+	$sth->execute();
+	my @authorizations;
+	while(my $row = $sth->fetchrow_arrayref) {
+		push @authorizations, $row->[0];
+	}
+	return @authorizations;
+}
+
 =head3 select_directdebit_invoices($lim, $authorization)
 
 Select all invoices for the given authorization code. Note: does not check if

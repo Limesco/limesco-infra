@@ -308,5 +308,6 @@ xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[2]/InstdAmt', '400
 # an exception must be thrown if any transaction is already marked before this
 # TODO: more authorizations so FRST and RCUR files are combined
 # TODO: select_directdebit_invoices may only return invoices that are not already in a SUCCESS or NEW transaction
+# TODO: get_active_directdebit_authorizations
 
 $dbh->disconnect();
