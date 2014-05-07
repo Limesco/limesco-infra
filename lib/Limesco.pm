@@ -110,7 +110,7 @@ sub get_account_like {
 
 	foreach my $word (@words) {
 		$word = lc($word);
-		@accounts = grep { lc($_->[1]) =~ /\Q$word\E/ } @accounts;
+		@accounts = grep { Encode::_utf8_on($_->[1]); lc($_->[1]) =~ /\Q$word\E/ } @accounts;
 		if(@accounts == 0) {
 			die "No accounts match '$string'\n";
 		}
