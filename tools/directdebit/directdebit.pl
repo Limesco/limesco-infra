@@ -355,6 +355,44 @@ sub export_directdebit_file {
 
 	$file->{'creation_time'} =~ s/ /T/;
 
+	# XXX Hack: activation costs are on an invoice, but are almost always already paid, so don't
+	# put them in a directdebit file.
+	# The right fix for this is to bookkeep the current balance of a user, put it on an invoice
+	# along with a "remaining payment" note, and only collect that remaining payment.
+	# This subroutine computes the amount of money to subtract from the total invoice price.
+	my $invoice_price = sub {
+		my ($invoice_id) = @_;
+		my $sth = $dbh->prepare("SELECT item_count, item_price FROM invoice_itemline WHERE invoice_id=? AND item_price > 30 AND description LIKE 'Activatie SIM-kaart'");
+		$sth->execute($invoice_id);
+		my $line = $sth->fetchrow_arrayref();
+		if($line && $sth->fetchrow_arrayref) {
+			die "More than one activation on invoice $invoice_id";
+		}
+		if($line && $line->[1] != 34.7107) {
+			die "Activation price is off on invoice $invoice_id";
+		}
+		my $subtract = 0;
+		if($line) {
+			$subtract = $line->[0] * 42;
+		}
+		$sth = $dbh->prepare("SELECT rounded_with_taxes FROM invoice WHERE id=?");
+		$sth->execute($invoice_id);
+		my $invoice = $sth->fetchrow_arrayref();
+		return $invoice->[0] - $subtract;
+	};
+
+	my $sum = 0;
+	my @new_transactions;
+	foreach(@transactions) {
+		my $price = $invoice_price->($_->{'invoice_id'});
+		if($price > 0) {
+			$sum += $price;
+			push @new_transactions, $_;
+		}
+	}
+	@transactions = @new_transactions;
+	$sum = sprintf("%.2f", $sum);
+
 	my @export_xml;
 	push @export_xml,
 		'<?xml version="1.0" encoding="utf-8"?>',
@@ -364,10 +402,7 @@ sub export_directdebit_file {
 		'  <GrpHdr>',
 		'   <MsgId>' . $file->{'message_id'} . '</MsgId>',
 		'   <CreDtTm>' . $file->{'creation_time'} . '</CreDtTm>',
-		'   <NbOfTxs>' . scalar @transactions . '</NbOfTxs>';
-	my $sum = 0;
-	grep { $sum += $_->{'rounded_with_taxes'} } @transactions;
-	push @export_xml,
+		'   <NbOfTxs>' . scalar @transactions . '</NbOfTxs>',
 		'   <CtrlSum>' . $sum . '</CtrlSum>',
 		'   <InitgPty>',
 		'    <Nm>Limesco</Nm>',
@@ -423,13 +458,14 @@ sub export_directdebit_file {
 		'    </Id>',
 		'   </CdtrSchmeId>';
 	foreach(@transactions) {
+		my $price = sprintf("%.2f", $invoice_price->($_->{'invoice_id'}));
 		push @export_xml,
 			'   <DrctDbtTxInf>',
 			'    <PmtId>',
 			'     <InstrId>' . $_->{'invoice_id'} . '</InstrId>',
 			'     <EndToEndId>' . $_->{'invoice_id'} . '</EndToEndId>',
 			'    </PmtId>',
-			'    <InstdAmt Ccy="EUR">' . $_->{'rounded_with_taxes'} . '</InstdAmt>',
+			'    <InstdAmt Ccy="EUR">' . $price . '</InstdAmt>',
 			'    <DrctDbtTx>',
 			'     <MndtRltdInf>',
 			'      <MndtId>' . $_->{'authorization_id'} . '</MndtId>',

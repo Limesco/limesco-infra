@@ -286,9 +286,9 @@ $xml = XML::LibXML->new->parse_string($xml);
 
 xml_node($xml, '/Document', 'Document root exists');
 xml_is($xml, '/Document/CstmrDrctDbtInitn/GrpHdr/NbOfTxs', 2, "Two transactions in this file");
-xml_is($xml, '/Document/CstmrDrctDbtInitn/GrpHdr/CtrlSum', 650.00, "Currency amount is OK");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/GrpHdr/CtrlSum', '650.00', "Currency amount is OK");
 xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/NbOfTxs', 2, "Two transactions in this file (other header)");
-xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/CtrlSum', 650.00, "Currency amount is OK (other header)");
+xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/CtrlSum', '650.00', "Currency amount is OK (other header)");
 xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/PmtTpInf/SeqTp', 'RCUR', "File is marked 'recurrent transfer'");
 xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/ReqdColltnDt', '2016-03-04', "Correct processing date is used");
 xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[1]/PmtId/InstrId', '13C000040', "Correct invoice ID is used");
