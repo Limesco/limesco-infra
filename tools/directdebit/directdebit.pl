@@ -10,10 +10,11 @@ use Sys::Hostname;
 use DateTime;
 use Try::Tiny;
 use Business::IBAN;
+use Encode;
 
 =head1 directdebit.pl
 
-Usage: directdebit.pl <--collect | --generate | --export id> [--processing-date yyyy-mm-dd] [infra-options]
+Usage: directdebit.pl <--collect | --generate | --authorize | --export id> [--processing-date yyyy-mm-dd] [infra-options]
 
 If --collect is given, this tool creates directdebit files. It takes all
 invoices for which a valid directdebit authorization exists and which have not
@@ -25,6 +26,9 @@ in the XML files.
 
 If --generate is given, generates a directdebit authentication id and exits.
 
+If --authorize is given, interactively asks a few authorization questions, then
+adds an authorization from signed form into the database.
+
 If --export is given, writes an XML file for the given directdebit file or
 message ID.
 
@@ -34,6 +38,7 @@ if(!caller) {
 	my $generate;
 	my $collect;
 	my $export;
+	my $authorize;
 
 	my $processing_date;
 	my $lim = Limesco->new_from_args(\@ARGV, sub {
@@ -47,6 +52,8 @@ if(!caller) {
 			$processing_date = $args->[++$$iref];
 		} elsif($arg eq "--export") {
 			$export = $args->[++$$iref];
+		} elsif($arg eq "--authorize") {
+			$authorize = 1;
 		} else {
 			return 0;
 		}
@@ -90,6 +97,27 @@ if(!caller) {
 		exit(0);
 	}
 
+	if($authorize) {
+		my $ask_question = sub {
+			print $_[0] . "\n";
+			my $answer = <STDIN>;
+			$answer = decode_utf8($answer);
+			1 while chomp $answer;
+			return $answer;
+		};
+		my $account_id = $ask_question->("Add authorization for what account name/ID?");
+		# If it's not just numbers, find an account with a similar name
+		$account_id = $lim->get_account_like($account_id)->{'id'} if $account_id !~ /^\d+$/;
+		my $auth_id = $ask_question->("Authorization ID?");
+		my $bank_account_name = $ask_question->("Bank account name?");
+		my $iban = $ask_question->("IBAN?");
+		my $bic = $ask_question->("BIC?");
+		my $date = $ask_question->("Signature date (YYYY-MM-DD)?");
+		add_directdebit_account($lim, $account_id, $auth_id, $bank_account_name, $iban, $bic, $date);
+		print "Successfully added authorization $auth_id.\n";
+		exit(0);
+	}
+
 	if($export) {
 		my $file;
 		if($export =~ /^LDD/) {
@@ -106,7 +134,7 @@ if(!caller) {
 		exit(0);
 	}
 
-	print "One of the --collect, --generate or --export options is required.\n";
+	print "One of the --collect, --generate, --authorize or --export options is required.\n";
 	exit(1);
 }
 
