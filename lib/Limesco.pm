@@ -84,10 +84,11 @@ sub read_config {
 }
 
 sub get_account {
-	my ($self, $account_id) = @_;
+	my ($self, $account_id, $date) = @_;
+	$date ||= 'today';
 	my $dbh = $self->get_database_handle();
-	my $sth = $dbh->prepare("SELECT * FROM account WHERE id=?");
-	$sth->execute($account_id);
+	my $sth = $dbh->prepare("SELECT * FROM account WHERE id=? AND period @> ?::date");
+	$sth->execute($account_id, $date);
 	my $account = $sth->fetchrow_hashref;
 	if(!$account) {
 		die "No such account";
