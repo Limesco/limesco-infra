@@ -103,7 +103,7 @@ sub get_account_like {
 	my @words = split /\s/, $string;
 	my @accounts;
 	my $sth = $dbh->prepare("SELECT id, concat(company_name, ' ', first_name, ' ', last_name, ' ',
-		first_name, ' ', company_name, ' ', last_name, ' ', company_name), state FROM account");
+		first_name, ' ', company_name, ' ', last_name, ' ', company_name), period FROM account");
 	$sth->execute();
 	while(my $row = $sth->fetchrow_arrayref()) {
 		push @accounts, [@$row];
