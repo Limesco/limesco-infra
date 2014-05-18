@@ -14,9 +14,10 @@ If the tests were succesful, install:
 
 	$ sudo make install
 
-This distribution uses PostgreSQL; to give your normal development UNIX user
-access to the server switch to the UNIX user running PostgreSQL and run
-(substituting $USERNAME with your username):
+This distribution requires at least PostgreSQL version 9.3; it uses the
+btree_gist module from the postgres-contrib repository. To give your normal
+development UNIX user access to the server switch to the UNIX user running
+PostgreSQL and run (substituting $USERNAME with your username):
 
 	$ createuser $USERNAME
 
