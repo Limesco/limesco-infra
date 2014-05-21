@@ -117,7 +117,7 @@ Returns the latest schema version supported by this tool.
 =cut
 
 sub get_latest_schema_version {
-	return 2;
+	return 3;
 }
 
 =head3 update_schema_version($lim, $dbh, $version)
@@ -401,6 +401,7 @@ sub initialize_database {
 		);");
 
 		add_directdebit_tables($lim, $dbh);
+		add_cdr_import_tables($lim, $dbh);
 
 		return $dbh->commit();
 	} catch {
@@ -434,7 +435,16 @@ sub upgrade_database {
 		if($current_version == 1) {
 			add_directdebit_tables($lim, $dbh);
 			update_schema_version($lim, $dbh, 2);
-		} else {
+			$current_version = 2;
+		}
+
+		if($current_version == 2) {
+			add_cdr_import_tables($lim, $dbh);
+			update_schema_version($lim, $dbh, 3);
+			$current_version = 3;
+		}
+
+		if($current_version > 3) {
 			die "Not implemented";
 		}
 
@@ -494,6 +504,23 @@ sub add_directdebit_tables {
 		-- No invoice can be in two transactions of the same status
 		UNIQUE(invoice_id, status)
 	);");
+}
+
+=head3 add_cdr_import_tables($lim, $dbh)
+
+Add tables related to the CDR importer. $dbh is the database handle
+on which the queries will be ran.
+
+=cut
+
+sub add_cdr_import_tables {
+	my ($lim, $dbh) = @_;
+
+	$dbh->do("CREATE TABLE cdrimports (
+		cdr_date DATE PRIMARY KEY NOT NULL,
+		import_time TIMESTAMP NOT NULL,
+		error LONGTEXT NULL
+	)");
 }
 
 1;
