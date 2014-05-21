@@ -13,20 +13,46 @@ use Text::CSV;
 
 =head1 cdr-import.pl
 
-Usage: cdr-import.pl [infra-options]
+Usage: cdr-import.pl [infra-options] [--date YYYY-MM-DD]
+
+Import all CDRs from SpeakUp. Asks URI base, username and password on stdin. If
+--date is given, retrieves CDRs for that date only; otherwise, make sure that
+all dates are up-to-date by 24 hours after the day ended.
 
 =cut
 
 if(!caller) {
+	my $date;
 	my $lim = Limesco->new_from_args(\@ARGV, sub {
 		my ($args, $iref) = @_;
 		my $arg = $args->[$$iref];
-		if($arg eq "--account") {
-			#$date = $args->[++$$iref];
+		if($arg eq "--date") {
+			$date = $args->[++$$iref];
 		} else {
 			return 0;
 		}
 	});
+
+	$|++;
+	print "URI base URL? ";
+	my $uri_base = <STDIN>;
+	print "Username? ";
+	my $username = <STDIN>;
+	print "Password? ";
+	my $password = <STDIN>;
+	1 while chomp $uri_base;
+	1 while chomp $username;
+	1 while chomp $password;
+	print "Retrieving token...\n";
+	my $token = get_speakup_login_token($lim, $uri_base, $username, $password);
+	if($date) {
+		print "Starting import for $date...\n";
+		import_speakup_cdrs_by_day($lim, $uri_base, $token, $date);
+	} else {
+		my $today = DateTime->now(time_zone => 'local')->ymd;
+		print "Starting import until $today...\n";
+		import_speakup_cdrs($lim, $uri_base, $token, $today);
+	}
 }
 
 =head2 Methods
