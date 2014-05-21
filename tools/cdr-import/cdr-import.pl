@@ -255,8 +255,17 @@ sub import_speakup_cdrs_by_day {
 				}
 
 				foreach(keys %$row) {
-					if($cdr->{$_} != $row->{$_}) {
-						die "CDR already existed but doesn't match: " . $row->{'id'};
+					if(!defined($cdr->{$_}) && !defined($row->{$_})) {
+						# both undefined, that's fine but don't warn
+					} elsif($_ eq "destination"
+					     && !defined($cdr->{$_})
+					     && defined($row->{$_})
+					     && $row->{$_} eq "") {
+						# we made it undef, database has empty, that's ok
+					} elsif(!defined($cdr->{$_})
+					     || !defined($row->{$_})
+					     || $cdr->{$_} ne $row->{$_}) {
+						die "CDR already existed but $_ doesn't match: " . $row->{'id'};
 					}
 				}
 			} else {
