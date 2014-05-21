@@ -6,6 +6,8 @@ use lib '../lib';
 use lib '../../lib';
 use Limesco;
 use Try::Tiny;
+use LWP::UserAgent;
+use HTTP::Cookies;
 
 =head1 cdr-import.pl
 
@@ -33,6 +35,35 @@ if(!caller) {
 
 sub get_speakup_login_token {
 	my ($lim, $uri_base, $username, $password) = @_;
+	$uri_base =~ s#/$##;
+
+	my $cookie_jar = HTTP::Cookies->new;
+
+	my $ua = LWP::UserAgent->new;
+	$ua->timeout(10);
+	$ua->agent("Liminfra/0.0 ");
+	$ua->cookie_jar($cookie_jar);
+	my $response = $ua->post($uri_base . '/login', {
+		username => $username,
+		password => $password,
+	});
+	# Failed login gives response code 200
+	if($response->code != 302) {
+		die "SpeakUp login token request failed: " . $response->status_line;
+	}
+	my $login_cookie;
+	$cookie_jar->scan(sub {
+		my (undef, $key, $val) = @_;
+		if($key eq "PHPSESSID") {
+			$login_cookie = $val;
+		} else {
+			warn "$key=$val\n";
+		}
+	});
+	if(!$login_cookie) {
+		die "SpeakUp login token request failed: no session cookie found\n";
+	}
+	return $login_cookie;
 }
 
 =head3 get_cdr_import_dates($lim, $date_today)
