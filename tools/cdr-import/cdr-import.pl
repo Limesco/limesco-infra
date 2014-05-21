@@ -213,12 +213,17 @@ sub import_speakup_cdrs_by_day {
 			my ($service) = $su_cdr->{'cid'} =~ /@(sms|data)$/;
 			$service ||= "voice";
 
+			my $connected;
+			if($service eq "voice") {
+				$connected = ($su_cdr->{'sip'} =~ /^200/) ? 1 : 0;
+			}
+
 			my $cdr = {
 				service => uc($service),
 				call_id => $su_cdr->{'cid'},
 				speakup_account => $su_cdr->{'account'},
 				units => $su_cdr->{'duration'},
-				connected => $service eq "voice" ? scalar ($su_cdr->{'sip'} =~ /^200/) : undef,
+				connected => $connected,
 				destination => ($su_cdr->{'destination'} || undef),
 				direction => uc($su_cdr->{'direction'}),
 			};
