@@ -9,6 +9,7 @@ use Try::Tiny;
 use DateTime;
 use LWP::UserAgent;
 use HTTP::Cookies;
+use Text::CSV;
 
 =head1 cdr-import.pl
 
@@ -119,12 +120,73 @@ sub get_cdr_import_dates {
 	return @days_to_update;
 }
 
-=head3 retrieve_speakup_cdrs($lim, $uri_base, $date, $callback)
+=head3 retrieve_speakup_cdrs($lim, $uri_base, $token, $date, $callback)
 
 =cut
 
 sub retrieve_speakup_cdrs {
-	my ($lim, $uri_base, $date, $callback) = @_;
+	my ($lim, $uri_base, $token, $date, $callback) = @_;
+
+	my $uri = URI->new($uri_base);
+	$uri_base =~ s#/$##;
+	$date =~ s#^(\d{4})-(\d\d)-(\d\d)$#$3/$2/$1#;
+
+	my $cookie_jar = HTTP::Cookies->new;
+	$cookie_jar->set_cookie(1, "PHPSESSID", $token, $uri->path, $uri->host, $uri->port);
+
+	my $ua = LWP::UserAgent->new;
+	$ua->timeout(10);
+	$ua->agent("Liminfra/0.0 ");
+	$ua->cookie_jar($cookie_jar);
+	my $response = $ua->post($uri_base . '/partner/cdr', {
+		period => 'day',
+		startdate => $date,
+		direction => 'both',
+		deliverystatus => 'both',
+		displaysip => 'yes',
+		displayppc => 'yes',
+		ratetype => 'normal',
+		outputData => 'detailed',
+		outputFormat => 'csv',
+		extensionId => '',
+		subscriptionAccountId => '',
+		customerId => '',
+		extensionNumber => '',
+		submit => '',
+	});
+	if($response->code != 200) {
+		die "SpeakUp CDR request for $date failed: " . $response->status_line;
+	}
+	if($response->content_type ne "text/csv") {
+		die "SpeakUp CDR request for $date failed: content-type is not text/csv";
+	}
+	my $csv = Text::CSV->new({binary => 1})
+		or die "Cannot use CSV: ".Text::CSV->error_diag();
+	
+	my $i = 0;
+	my @column_names;
+	for(split /^/, ${$response->content_ref}) {
+		++$i;
+		if(!$csv->parse($_)) {
+			die "Failed to parse line $i of response";
+		}
+		if(!@column_names) {
+			@column_names = $csv->fields;
+			next;
+		}
+
+		my @columns = $csv->fields;
+		my $cdr = {};
+		for (0 .. $#column_names) {
+			$cdr->{$column_names[$_]} = $columns[$_];
+		}
+
+		try {
+			$callback->($cdr);
+		} catch {
+			die "Callback failed during parsing of line $i of response: $_";
+		};
+	}
 }
 
 =head3 import_speakup_cdrs_by_day($lim, $uri_base, $token, $date)
