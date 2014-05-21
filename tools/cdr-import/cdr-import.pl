@@ -223,6 +223,10 @@ sub import_speakup_cdrs_by_day {
 				$units = 0;
 			}
 
+			if($service eq "data" || ($service eq "sms" && $su_cdr->{'direction'} eq "in")) {
+				delete $su_cdr->{'destination'};
+			}
+
 			my $cdr = {
 				service => uc($service),
 				call_id => $su_cdr->{'cid'},

@@ -302,7 +302,7 @@ is_deeply($cdrs[1], {
 	units => 6,
 	connected => undef,
 	source => undef,
-	destination => "Netherlands - Other - Test Destination",,
+	destination => undef, # CServ used to remove destination on data
 	direction => "OUT",
 	leg => undef,
 	reason => undef,
