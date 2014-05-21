@@ -195,6 +195,91 @@ sub retrieve_speakup_cdrs {
 
 sub import_speakup_cdrs_by_day {
 	my ($lim, $uri_base, $token, $date) = @_;
+	my $dbh = $lim->get_database_handle;
+
+	$dbh->begin_work;
+	my $is_new_row = 1;
+	try {
+		$dbh->do("LOCK TABLE cdrimports");
+
+		my $sth = $dbh->prepare("SELECT cdr_date FROM cdrimports WHERE cdr_date=?");
+		$sth->execute($date);
+		my $row = $sth->fetchrow_arrayref;
+		$is_new_row = !defined $row;
+
+		retrieve_speakup_cdrs($lim, $uri_base, $token, $date, sub {
+			my $su_cdr = $_[0];
+
+			my ($service) = $su_cdr->{'cid'} =~ /@(sms|data)$/;
+			$service ||= "voice";
+
+			my $cdr = {
+				service => uc($service),
+				call_id => $su_cdr->{'cid'},
+				speakup_account => $su_cdr->{'account'},
+				units => $su_cdr->{'duration'},
+				connected => $service eq "voice" ? scalar ($su_cdr->{'sip'} =~ /^200/) : undef,
+				destination => ($su_cdr->{'destination'} || undef),
+				direction => uc($su_cdr->{'direction'}),
+			};
+			for(qw/from to time/) {
+				$cdr->{$_} = $su_cdr->{$_};
+			}
+
+			# does one already exist?
+			# TODO: this should use leg and legreason
+			$sth = $dbh->prepare("SELECT * FROM cdr WHERE call_id=? AND time=? AND \"from\"=? AND \"to\"=?");
+			$sth->execute($cdr->{'call_id'}, $cdr->{'time'}, $cdr->{'from'}, $cdr->{'to'});
+			if(my $row = $sth->fetchrow_hashref) {
+				# then ours must be equal to the in-db one
+				$cdr->{'id'} = $row->{'id'};
+
+				# rows that may differ
+				for(qw/pricing_id pricing_info computed_cost computed_price invoice_id/) {
+					delete $cdr->{$_};
+					delete $row->{$_};
+				}
+
+				foreach(keys %$row) {
+					if($cdr->{$_} != $row->{$_}) {
+						die "CDR already existed but doesn't match: " . $row->{'id'};
+					}
+				}
+			} else {
+				# add it to the database
+				my @fields = keys %$cdr;
+				my $fields = join('", "', @fields);
+				my $placeholders = join ", ", (('?') x @fields);
+				$sth = $dbh->prepare("INSERT INTO cdr (\"$fields\") VALUES ($placeholders)");
+				$sth->execute(map { $cdr->{$_} } @fields);
+			}
+		});
+
+		if($is_new_row) {
+			$dbh->do("INSERT INTO cdrimports (import_time, cdr_date) VALUES ('now', ?)",
+				undef, $date);
+		} else {
+			$dbh->do("UPDATE cdrimports SET error=NULL, import_time='now' WHERE cdr_date=?",
+				undef, $date);
+		}
+
+		$dbh->commit;
+	} catch {
+		my $exception = $_ || "Unknown error";
+		# TODO: this is a race condition, since the next importer may lock cdrimports
+		# and finish an import succesfully while we wait to update the cdrimports table
+		# with our error; this can be reliably fixed by taking a new lock, seeing if the
+		# import_time changed, updating it if not, then committing
+		$dbh->rollback;
+		if($is_new_row) {
+			$dbh->do("INSERT INTO cdrimports (error, import_time, cdr_date) VALUES (?, 'now', ?)",
+				undef, $exception, $date);
+		} else {
+			$dbh->do("UPDATE cdrimports SET error=?, import_time='now' WHERE cdr_date=?",
+				undef, $exception, $date);
+		}
+		# don't re-throw, exception is handled by inserting it into the database
+	};
 }
 
 =head3 import_speakup_cdrs($lim, $uri_base, $token, $date_today)
@@ -203,6 +288,10 @@ sub import_speakup_cdrs_by_day {
 
 sub import_speakup_cdrs {
 	my ($lim, $uri_base, $token, $date_today) = @_;
+	my @dates = get_cdr_import_dates($lim, $date_today);
+	foreach(@dates) {
+		import_speakup_cdrs_by_day($lim, $uri_base, $token, $_);
+	}
 }
 
 1;
