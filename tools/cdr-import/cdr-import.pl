@@ -6,6 +6,7 @@ use lib '../lib';
 use lib '../../lib';
 use Limesco;
 use Try::Tiny;
+use DateTime;
 use LWP::UserAgent;
 use HTTP::Cookies;
 
@@ -72,7 +73,50 @@ sub get_speakup_login_token {
 
 sub get_cdr_import_dates {
 	my ($lim, $date_today) = @_;
-	return ();
+
+	{
+		my ($t_year, $t_month, $t_day) = $date_today =~ /^(\d{4})-(\d\d)-(\d\d)$/;
+		if(!$t_day) {
+			die "Don't understand date syntax of today: $date_today";
+		}
+		$date_today = DateTime->new(year => $t_year, month => $t_month, day => $t_day);
+	}
+
+	my $dbh = $lim->get_database_handle();
+
+	# Re-import all CDR dates where an error occured or the day was last refreshed
+	# less than 48 hours after the day began
+
+	my @days_to_update;
+
+	my $sth = $dbh->prepare("SELECT cdr_date FROM cdrimports
+		WHERE error IS NOT NULL
+		OR (import_time <= cdr_date + '24 hours'::interval)");
+	$sth->execute();
+	while(my $row = $sth->fetchrow_arrayref) {
+		push @days_to_update, $row->[0];
+	}
+
+	# Add all dates which are between last mentioned date and given 'today' date
+	$sth = $dbh->prepare("SELECT cdr_date + '1 day'::interval AS startdate
+		FROM cdrimports ORDER BY cdr_date DESC LIMIT 1");
+	$sth->execute();
+	my $date = $sth->fetchrow_arrayref;
+	if(!$date) {
+		warn "No dates in the cdrimports table yet, will start fetching today.\n";
+		warn "If you want to start on another date, add a row to the cdrimports table\n";
+		warn "with 'error' set to anything non-NULL, and I will start fetching there.\n";
+		return ($date_today);
+	}
+
+	my ($year, $month, $day) = $date->[0] =~ /^(\d{4})-(\d\d)-(\d\d) /;
+	$date = DateTime->new(year => $year, month => $month, day => $day);
+	until($date > $date_today) {
+		push @days_to_update, $date->ymd;
+		$date->add(days => 1);
+	}
+
+	return @days_to_update;
 }
 
 =head3 retrieve_speakup_cdrs($lim, $uri_base, $date, $callback)
