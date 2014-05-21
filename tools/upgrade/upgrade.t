@@ -120,6 +120,7 @@ try {
 	initialize_database($lim);
 	pass("didn't throw");
 } catch {
+	diag($_);
 	fail("didn't throw");
 };
 undef $current_schema_version;
@@ -127,6 +128,7 @@ try {
 	$current_schema_version = get_current_schema_version($lim);
 	pass("didn't throw");
 } catch {
+	diag($_);
 	fail("didn't throw");
 };
 ok(defined $current_schema_version && $current_schema_version > 0, "current schema version is set");
@@ -145,6 +147,7 @@ try {
 	$current_schema_version = get_current_schema_version($lim);
 	pass("didn't throw");
 } catch {
+	diag($_);
 	fail("didn't throw");
 };
 ok(defined $current_schema_version && $current_schema_version == 4, "current schema version is set");
