@@ -291,7 +291,13 @@ sub import_speakup_cdrs_by_day {
 					} elsif(!defined($cdr->{$_})
 					     || !defined($row->{$_})
 					     || $cdr->{$_} ne $row->{$_}) {
-						die "CDR already existed but $_ doesn't match: " . $row->{'id'};
+						# TODO: without a uniquely identifying field or combination of fields,
+						# we can't be sure if this is the same CDR or one that looks a lot like
+						# it; for now, warn about this situation and only one of two CDRs will be
+						# inserted into the database
+						warn sprintf("CDR-lookalike: id=%d, account=%s, service=%s, units=%d",
+							$row->{'id'}, map { $cdr->{$_} } qw/speakup_account service units/);
+						#die "CDR already existed but $_ doesn't match: " . $row->{'id'};
 					}
 				}
 			} else {
