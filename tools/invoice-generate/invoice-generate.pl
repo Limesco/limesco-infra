@@ -315,7 +315,11 @@ sub generate_invoice {
 		my $sth = $dbh->prepare("SELECT * FROM sim WHERE owner_account_id=? AND activation_invoice_id IS NULL AND state != 'DISABLED'");
 		$sth->execute($account_id);
 		while(my $sim = $sth->fetchrow_hashref) {
-			$dbh->do("UPDATE sim SET activation_invoice_id=? WHERE iccid=?", undef, $invoice_id, $sim->{'iccid'});
+			# TODO: this is a hack
+			# * not only the current record, but also all future records must be updated
+			# * the current record must not be updated, but ended and a new record inserted
+			#   (sim-change functionality?)
+			$dbh->do("UPDATE sim SET activation_invoice_id=? WHERE iccid=? AND period @> 'now'::date", undef, $invoice_id, $sim->{'iccid'});
 			$normal_itemline->($invoice_id, "Activatie SIM-kaart", 1, $SIM_CARD_ACTIVATION_PRICE);
 		}
 
@@ -390,7 +394,11 @@ sub generate_invoice {
 
 				$invoicing_month = $end_of_this_period->add(days => 1);
 			}
-			$dbh->do("UPDATE sim SET last_monthly_fees_invoice_id=?, last_monthly_fees_month=? WHERE iccid=?", undef, $invoice_id, $date, $sim->{'iccid'});
+			# TODO: this is a hack
+			# * not only the current record, but also all future records must be updated
+			# * the current record must not be updated, but ended and a new record inserted
+			#   (sim-change functionality?)
+			$dbh->do("UPDATE sim SET last_monthly_fees_invoice_id=?, last_monthly_fees_month=? WHERE iccid=? AND period @> 'now'::date", undef, $invoice_id, $date, $sim->{'iccid'});
 		}
 
 		my %pricings;
