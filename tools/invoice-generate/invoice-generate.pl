@@ -534,7 +534,7 @@ sub generate_invoice {
 					$normal_itemline->($invoice_id, $description, $in_bundle_usage, 0);
 					if($out_bundle_usage > 0) {
 						$description = sprintf("%s (buiten bundel %s, SIM %s)", "Data Nederland", $month, $number);
-						$normal_itemline->($invoice_id, $description, $out_bundle_usage, $DATA_USAGE_OUT_OF_BUNDLE_PER_MB);
+						$normal_itemline->($invoice_id, $description, $out_bundle_usage, $DATA_USAGE_OUT_OF_BUNDLE_PER_MB / 1000);
 					}
 				} elsif($apn eq "APN_NODATA") {
 					my ($tier1, $tier2, $tier3) = (0, 0, 0);
