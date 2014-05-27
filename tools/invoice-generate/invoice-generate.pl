@@ -239,6 +239,43 @@ sub get_sim_contract_end_date {
 	)->subtract(days => 1);
 }
 
+=head3 phonenumber_to_apn_type_in_month($dbh, $account_id, $number, $yearmonth)
+
+Take a phone number, of which we know it belongs to a certain account ID, and try
+to determine what APN type it had during a month. This works for SIMs that were
+already active before this month, but also for SIMs that became active during the
+month.
+
+=cut
+
+sub phonenumber_to_apn_type_in_month {
+	my ($dbh, $account_id, $number, $yearmonth) = @_;
+	my ($year, $month) = $yearmonth =~ /^(\d{4})-(\d\d)$/;
+	if(!$year || !$month) {
+		die "Unrecognised yearmonth format: $yearmonth";
+	}
+
+	# Find the first occurance of an APN for this SIM
+	# TODO: this is possible in a non-iterative manner by splitting the
+	# subquery off and accepting periods during the given month.
+	my $date = DateTime->new(year => $year, month => $month, day => 1);
+	my $sth = $dbh->prepare("SELECT data_type FROM sim WHERE owner_account_id=? AND period @> ?::date AND iccid=
+		(SELECT sim_iccid FROM phonenumber WHERE phonenumber.phonenumber=? AND period @> ?::date)");
+	until($date->month != $month) {
+		$sth->execute($account_id, $date->ymd, $number, $date->ymd);
+		my $sim = $sth->fetchrow_hashref;
+		if($sim && $sth->fetchrow_hashref) {
+			die "Could not invoice data CDR: it belongs to multiple SIMs\n";
+		}
+		if($sim) {
+			return $sim->{'data_type'};
+		}
+		$date->add(days => 1);
+	}
+	die sprintf("Could not invoice data CDR for account %d, month %s, phone number %s: no valid data contract found",
+		$account_id, $yearmonth, $number);
+}
+
 =head3 generate_invoice($lim, $account_id, $date)
 
 Create an invoice in the database for account $account_id, with invoice date
@@ -480,15 +517,7 @@ sub generate_invoice {
 		# if it's not a bundle make an itemline with tiered usage
 		foreach my $month (keys %month_to_number_to_data_cdrs) {
 			foreach my $number (keys %{$month_to_number_to_data_cdrs{$month}}) {
-				# Get APN type at the first of this month
-				# TODO: this should be its own function
-				$sth = $dbh->prepare("SELECT * FROM sim WHERE owner_account_id=? AND period @> ?::date AND iccid=(SELECT sim_iccid FROM phonenumber WHERE phonenumber.phonenumber=? AND period @> ?::date)");
-				$sth->execute($account_id, "$month-01", $number, "$month-01");
-				my $sim = $sth->fetchrow_hashref();
-				if(!$sim || $sth->fetchrow_hashref()) {
-					die "Could not invoice data CDR: it does not belong to a SIM or it belongs to multiple SIMs";
-				}
-				my $apn = $sim->{'data_type'};
+				my $apn = phonenumber_to_apn_type_in_month($dbh, $account_id, $number, $month);
 				my $sum = 0;
 				foreach(@{$month_to_number_to_data_cdrs{$month}{$number}}) {
 					$sum += $_->{'units'};
