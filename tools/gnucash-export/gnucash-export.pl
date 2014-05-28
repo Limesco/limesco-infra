@@ -97,7 +97,7 @@ sub get_all_invoices {
 		while (my $row = $sth->fetchrow_hashref()) {
 			my $account = get_account($lim, $row->{account_id});
 			$row->{full_name} = $account->{last_name}.", ".$account->{first_name};
-			$row->{full_name} .= " (".$account->{company_name}.")" if ($account->{company_name} ne "");
+			$row->{full_name} .= " (".$account->{company_name}.")" if $account->{company_name};
 			push @{$invoices}, $row;
 		}
 	} else {
