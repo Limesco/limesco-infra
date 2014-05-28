@@ -596,7 +596,7 @@ sub generate_invoice {
 		};
 
 		$dbh->do("INSERT INTO invoice (id, account_id, currency, date, creation_time, rounded_without_taxes, rounded_with_taxes)
-				VALUES (?, ?, ?, ?, now()::date, ?, ?)", undef, $invoice_id, $account_id, 'EUR', $date, $invoice_sum, $invoice_sum + $tax);
+				VALUES (?, ?, ?, ?, now()::timestamp, ?, ?)", undef, $invoice_id, $account_id, 'EUR', $date, $invoice_sum, $invoice_sum + $tax);
 
 		foreach my $il (@itemlines) {
 			$dbh->do("INSERT INTO invoice_itemline (type, invoice_id, description, taxrate, rounded_total, base_amount, item_price,
