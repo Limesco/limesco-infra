@@ -8,8 +8,9 @@
 \usepackage{concmath}
 \usepackage[T1]{fontenc}
 \usepackage{tabularx}
+\usepackage{longtable}
 
-\newcommand{\totaalbedrag}{\footnotesize{Het totaalbedrag inclusief BTW dient te worden voldaan binnen 14 kalenderdagen na de \\
+\newcommand{\totaalbedrag}{\footnotesize{Het totaalbedrag inclusief BTW dient te worden voldaan binnen 14 kalenderdagen na de
 factuurdatum (\beginperl my ($y, $m, $d) = $invoice->{'date'} =~ /^(20\d\d)-(\d\d)-(\d\d)/; $OUT .= "$d-$m-$y"; \endperl).
 Indien er vragen, opmerkingen of klachten zijn over deze factuur, kun je ons
 een mail sturen via \href{mailto:support@limesco.nl}{support@limesco.nl} onder
@@ -60,10 +61,17 @@ Factuurdatum & \beginperl formatDate($invoice->{'date'}) \endperl
 \newcolumntype{A}{>{\raggedleft\arraybackslash}p{3.0cm}}
 \newcolumntype{B}{>{\raggedleft\arraybackslash}p{1.8cm}}
 \newcolumntype{S}{>{\raggedleft\arraybackslash}p{3.0cm}}
-\begin{tabularx}{\textwidth}{ | X | A | S | B | }
+\begin{longtable}{ | p{7.5cm} | B | S | S | } 
 \hline
-Omschrijving      & Aantal  & Stuksprijs & Bedrag \\
+\textbf{Omschrijving}      & \textbf{Aantal}  & \textbf{Stuksprijs} & \textbf{Bedrag} \\
 \hline
+\endfirsthead
+
+\hline
+\textbf{Omschrijving}      & \textbf{Aantal}  & \textbf{Stuksprijs} & \textbf{Bedrag} \\
+\hline
+\endhead
+
 \beginperl
 	foreach my $itemline (grep { $_->{'type'} ne "TAX" } @{$invoice->{'item_lines'}}) {
 		my @description = split /\n/, $itemline->{'description'};
@@ -79,12 +87,12 @@ Omschrijving      & Aantal  & Stuksprijs & Bedrag \\
 			die "Unknown item line type " . $itemline->{'type'} . "\n";
 		}
 		foreach my $line (@description) {
-			$OUT .= "$line & & & \\\\\n";
+			$OUT .= "\\nopagebreak[4] $line & & & \\\\\n";
 		}
 		$OUT .= "\\hline\n";
 	}
 \endperl
-\end{tabularx}
+\end{longtable}
 
 \begin{flushright}
 Totaal excl. BTW: \beginperl sprintf( "%.2f", $invoice->{'rounded_without_taxes'} ) \endperl
