@@ -106,7 +106,7 @@ sub for_every_unpriced_cdr {
 	my ($lim, $callback) = @_;
 	my $dbh = $lim->get_database_handle();
 
-	my $sth = $dbh->prepare("SELECT * FROM cdr WHERE pricing_id IS NULL");
+	my $sth = $dbh->prepare("SELECT * FROM cdr WHERE pricing_id IS NULL ORDER BY time ASC");
 	$sth->execute() or die "Query failed";
 	while(my $cdr = $sth->fetchrow_hashref()) {
 		$callback->($lim, $cdr);
