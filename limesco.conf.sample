@@ -8,3 +8,12 @@
 ; options=
 database=liminfra
 
+[email]
+from_name=Sjors Gielen
+from_address=sjors@limesco.nl
+replyto_name=Limesco Support
+replyto_address=support@limesco.nl
+blind_cc=sjors@limesco.nl
+; Optional fields, given are the defaults
+; smtp_host=localhost
+; smtp_port=25

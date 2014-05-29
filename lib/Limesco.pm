@@ -48,6 +48,61 @@ sub new_from_config {
 	return $self;
 }
 
+=head3 email_config()
+
+Returns a hashref with configuration to use to send e-mail, as read from the
+configuration file. This includes smtp_host, smtp_port, from, replyto and
+optionally a blind_cc member.
+
+=cut
+
+sub email_config {
+	my ($self) = @_;
+	if(!$self->{'config'}{'email'}) {
+		die "Failed to initialise e-mail sending: configuration block missing, update your limesco.conf\n";
+	}
+
+	my $em = $self->{'config'}{'email'};
+
+	my @allowed_keys = qw/from_name from_address replyto_name
+		replyto_address blind_cc smtp_host smtp_port/;
+	my @required_fields = qw/from_address replyto_address/;
+	my @keys = keys %$em;
+	my $config_ok = 1;
+
+	foreach my $key (@required_fields) {
+		if(!grep { $key eq $_ } @keys) {
+			warn "Required variable in e-mail configuration missing: $key\n";
+			$config_ok = 0;
+		}
+	}
+	foreach my $key (@keys) {
+		if(!grep { $key eq $_ } @allowed_keys) {
+			warn "Unknown variable in e-mail configuration: $key\n";
+			$config_ok = 0;
+		}
+	}
+
+	$em->{'smtp_host'} ||= "localhost";
+	$em->{'smtp_port'} ||= 25;
+	if($em->{'from_name'}) {
+		$em->{'from'} = sprintf('"%s" <%s>', $em->{'from_name'}, $em->{'from_address'});
+	} else {
+		$em->{'from'} = $em->{'from_address'};
+	}
+	if($em->{'replyto_name'}) {
+		$em->{'replyto'} = sprintf('"%s" <%s>', $em->{'replyto_name'}, $em->{'replyto_address'});
+	} else {
+		$em->{'replyto'} = $em->{'replyto_address'};
+	}
+
+	if(!$config_ok) {
+		die "Configuration failed checks\n";
+	}
+
+	return $self->{'config'}{'email'};
+}
+
 sub get_database_handle {
 	my ($self, $allow_cached) = @_;
 	$allow_cached = 1 if not defined($allow_cached);
