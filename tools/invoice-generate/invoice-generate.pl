@@ -548,11 +548,11 @@ sub generate_invoice {
 					} else {
 						$tier1 = $sum;
 					}
-					$normal_itemline->($invoice_id, "Dataverbruik onder 500 mb", $tier1, $DATA_USAGE_TIER1_PER_MB / 1000);
+					$normal_itemline->($invoice_id, "Dataverbruik onder 500 MB", $tier1, $DATA_USAGE_TIER1_PER_MB / 1000);
 					if($tier2 > 0 || $tier3 > 0) {
-						$normal_itemline->($invoice_id, "Dataverbruik onder 1000 mb", $tier2, $DATA_USAGE_TIER2_PER_MB / 1000);
+						$normal_itemline->($invoice_id, "Dataverbruik onder 1000 MB", $tier2, $DATA_USAGE_TIER2_PER_MB / 1000);
 						if($tier3 > 0) {
-							$normal_itemline->($invoice_id, "Dataverbruik boven 1000 mb", $tier3, $DATA_USAGE_TIER3_PER_MB / 1000);
+							$normal_itemline->($invoice_id, "Dataverbruik boven 1000 MB", $tier3, $DATA_USAGE_TIER3_PER_MB / 1000);
 						}
 					}
 				} else {
