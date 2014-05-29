@@ -21,8 +21,8 @@ invoices for which a valid directdebit authorization exists and which have not
 been collected through directdebit yet, creates transactions for them and files
 for those transactions. The files are written as LDD-date-FRST.xml and
 LDD-date-RCUR.xml.  If no transactions existed for a type, no file is written.
---processing-date can be given to write another date for directdebit processing
-in the XML files.
+--processing-date is required, it is the date at which the direct debit order
+will be processed (the date the funds will be transferred).
 
 If --generate is given, generates a directdebit authentication id and exits.
 
@@ -65,6 +65,10 @@ if(!caller) {
 	}
 
 	if($collect) {
+		if(!$processing_date) {
+			die "Missing parameter --processing-date\n";
+		}
+
 		my @auths = get_active_directdebit_authorizations($lim);
 		foreach my $authorization (@auths) {
 			my @invoices = select_directdebit_invoices($lim, $authorization);
