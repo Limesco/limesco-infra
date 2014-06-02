@@ -112,39 +112,7 @@ Delete an account. $date is the optional date of deletion; if not given,
 
 sub delete_account {
 	my ($lim, $account_id, $date) = @_;
-	$date ||= 'today';
-	my $dbh = $lim->get_database_handle();
-
-	$dbh->begin_work;
-
-	try {
-		$dbh->do("LOCK TABLE account;");
-		my $sth = $dbh->prepare("SELECT id, period, lower(period) AS old_date, ?::date AS new_date FROM account WHERE id=? AND upper(period) IS NULL AND period @> ?::date");
-		$sth->execute($date, $account_id, $date);
-		my $old_account = $sth->fetchrow_hashref;
-		if(!$old_account) {
-			die "Cannout change account $account_id at date $date, doesn't exist or it is already historical";
-		}
-
-		# If the new date overwrites the last period, delete the row, otherwise update it
-		my $changed_rows;
-		if($old_account->{'old_date'} eq $old_account->{'new_date'}) {
-			my $sth = $dbh->prepare("DELETE FROM account WHERE id=? AND period=?");
-			$changed_rows = $sth->execute($old_account->{'id'}, $old_account->{'period'});
-		} else {
-			my $sth = $dbh->prepare("UPDATE account SET period=daterange(lower(period), ?) WHERE id=? AND period=?");
-			$changed_rows = $sth->execute($date, $old_account->{id}, $old_account->{period});
-		}
-
-		if(!$changed_rows) {
-			die "Failed to delete account $account_id, even though it existed";
-		}
-
-		$dbh->commit;
-	} catch {
-		$dbh->rollback;
-		die $_;
-	};
+	delete_object($lim, _account_object_info(), $account_id, $date);
 }
 
 1;
