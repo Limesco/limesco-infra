@@ -133,10 +133,10 @@ sub update_object {
 		my $changed_rows;
 		if($old_object->{'old_date'} eq $old_object->{'new_date'}) {
 			my $sth = $dbh->prepare("DELETE FROM $table_name WHERE $primary_key=? AND period=?");
-			$changed_rows = $sth->execute($old_object->{'id'}, $old_object->{'period'});
+			$changed_rows = $sth->execute($old_object->{$primary_key}, $old_object->{'period'});
 		} else {
 			my $sth = $dbh->prepare("UPDATE $table_name SET period=daterange(lower(period), ?) WHERE $primary_key=? AND period=?");
-			$changed_rows = $sth->execute($date, $old_object->{id}, $old_object->{period});
+			$changed_rows = $sth->execute($date, $old_object->{$primary_key}, $old_object->{period});
 		}
 		if(!$changed_rows) {
 			die "Failed to change object $object_id, even though it existed";
@@ -216,10 +216,10 @@ sub delete_object {
 		my $changed_rows;
 		if($old_object->{'old_date'} eq $old_object->{'new_date'}) {
 			my $sth = $dbh->prepare("DELETE FROM $table_name WHERE $primary_key=? AND period=?");
-			$changed_rows = $sth->execute($old_object->{'id'}, $old_object->{'period'});
+			$changed_rows = $sth->execute($old_object->{$primary_key}, $old_object->{'period'});
 		} else {
 			my $sth = $dbh->prepare("UPDATE $table_name SET period=daterange(lower(period), ?) WHERE $primary_key=? AND period=?");
-			$changed_rows = $sth->execute($date, $old_object->{id}, $old_object->{period});
+			$changed_rows = $sth->execute($date, $old_object->{$primary_key}, $old_object->{period});
 		}
 
 		if(!$changed_rows) {
