@@ -49,13 +49,17 @@ sub create_object {
 	unshift @db_fields, "period";
 	unshift @db_values, '['.$date.',)';
 
-	my $query = "INSERT INTO account (id, " . join(", ", @db_fields) . ")";
-	$query .= " VALUES (NEXTVAL('account_id_seq'), " . join (", ", (('?') x @db_fields)) . ")";
+	my $table_name = $object_info->{'table_name'};
+	my $primary_key = $object_info->{'primary_key'};
+	my $primary_key_seq = $object_info->{'primary_key_seq'};
+
+	my $query = "INSERT INTO $table_name ($primary_key, " . join(", ", @db_fields) . ")";
+	$query .= " VALUES (NEXTVAL('$primary_key_seq'), " . join (", ", (('?') x @db_fields)) . ")";
 
 	my $sth = $dbh->prepare($query);
 	$sth->execute(@db_values);
 
-	my $account_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "account_id_seq"});
+	my $account_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => $primary_key_seq});
 	return get_account($lim, $account_id, $date);
 }
 
@@ -80,9 +84,12 @@ sub update_object {
 	$dbh->begin_work;
 
 	try {
-		$dbh->do("LOCK TABLE account;");
+		my $table_name = $object_info->{'table_name'};
+		my $primary_key = $object_info->{'primary_key'};
 
-		my $sth = $dbh->prepare("SELECT *, lower(period) AS old_date, ?::date AS new_date FROM account WHERE id=? AND upper(period) IS NULL AND period @> ?::date");
+		$dbh->do("LOCK TABLE $table_name;");
+
+		my $sth = $dbh->prepare("SELECT *, lower(period) AS old_date, ?::date AS new_date FROM $table_name WHERE $primary_key=? AND upper(period) IS NULL AND period @> ?::date");
 		$sth->execute($date, $account_id, $date);
 		my $old_account = $sth->fetchrow_hashref;
 		if(!$old_account) {
@@ -92,10 +99,10 @@ sub update_object {
 		# If the new date overwrites the last period, delete the row, otherwise update it
 		my $changed_rows;
 		if($old_account->{'old_date'} eq $old_account->{'new_date'}) {
-			my $sth = $dbh->prepare("DELETE FROM account WHERE id=? AND period=?");
+			my $sth = $dbh->prepare("DELETE FROM $table_name WHERE $primary_key=? AND period=?");
 			$changed_rows = $sth->execute($old_account->{'id'}, $old_account->{'period'});
 		} else {
-			my $sth = $dbh->prepare("UPDATE account SET period=daterange(lower(period), ?) WHERE id=? AND period=?");
+			my $sth = $dbh->prepare("UPDATE $table_name SET period=daterange(lower(period), ?) WHERE $primary_key=? AND period=?");
 			$changed_rows = $sth->execute($date, $old_account->{id}, $old_account->{period});
 		}
 		if(!$changed_rows) {
@@ -130,10 +137,10 @@ sub update_object {
 		unshift @db_fields, "period";
 		unshift @db_values, '['.$date.',)';
 
-		unshift @db_fields, "id";
+		unshift @db_fields, $primary_key;
 		unshift @db_values, $account_id;
 
-		my $query = "INSERT INTO account (" . join(", ", @db_fields) . ")";
+		my $query = "INSERT INTO $table_name (" . join(", ", @db_fields) . ")";
 		$query .= " VALUES (" . join (", ", (('?') x @db_fields)) . ")";
 
 		$sth = $dbh->prepare($query);
@@ -161,8 +168,11 @@ sub delete_object {
 	$dbh->begin_work;
 
 	try {
-		$dbh->do("LOCK TABLE account;");
-		my $sth = $dbh->prepare("SELECT id, period, lower(period) AS old_date, ?::date AS new_date FROM account WHERE id=? AND upper(period) IS NULL AND period @> ?::date");
+		my $table_name = $object_info->{'table_name'};
+		my $primary_key = $object_info->{'primary_key'};
+
+		$dbh->do("LOCK TABLE $table_name;");
+		my $sth = $dbh->prepare("SELECT $primary_key, period, lower(period) AS old_date, ?::date AS new_date FROM $table_name WHERE $primary_key=? AND upper(period) IS NULL AND period @> ?::date");
 		$sth->execute($date, $account_id, $date);
 		my $old_account = $sth->fetchrow_hashref;
 		if(!$old_account) {
@@ -172,10 +182,10 @@ sub delete_object {
 		# If the new date overwrites the last period, delete the row, otherwise update it
 		my $changed_rows;
 		if($old_account->{'old_date'} eq $old_account->{'new_date'}) {
-			my $sth = $dbh->prepare("DELETE FROM account WHERE id=? AND period=?");
+			my $sth = $dbh->prepare("DELETE FROM $table_name WHERE $primary_key=? AND period=?");
 			$changed_rows = $sth->execute($old_account->{'id'}, $old_account->{'period'});
 		} else {
-			my $sth = $dbh->prepare("UPDATE account SET period=daterange(lower(period), ?) WHERE id=? AND period=?");
+			my $sth = $dbh->prepare("UPDATE $table_name SET period=daterange(lower(period), ?) WHERE $primary_key=? AND period=?");
 			$changed_rows = $sth->execute($date, $old_account->{id}, $old_account->{period});
 		}
 

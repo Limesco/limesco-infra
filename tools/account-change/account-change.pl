@@ -53,6 +53,9 @@ sub _account_object_info {
 	return {
 		required_fields => [_account_required_fields()],
 		optional_fields => [_account_optional_fields()],
+		table_name => "account",
+		primary_key => "id",
+		primary_key_seq => "account_id_seq",
 	};
 }
 
