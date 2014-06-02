@@ -59,4 +59,91 @@ sub create_object {
 	return get_account($lim, $account_id, $date);
 }
 
+=head3 update_object($lim, $object_info, $account_id, $changes, [$date])
+
+Update an account. $date is the optional date of the changes; if not given,
+'today' is assumed. $account_id is the ID of the account to change, $changes
+is a hashref of wanted changes. If any of the given changes is impossible, the
+full update is aborted and an exception is thrown. $changes must only contain
+fields that are either required or optional for an account.
+
+This method returns the updated account, or throws an exception if something
+failed.
+
+=cut
+
+sub update_object {
+	my ($lim, $object_info, $account_id, $changes, $date) = @_;
+	$date ||= 'today';
+	my $dbh = $lim->get_database_handle();
+
+	$dbh->begin_work;
+
+	try {
+		$dbh->do("LOCK TABLE account;");
+
+		my $sth = $dbh->prepare("SELECT *, lower(period) AS old_date, ?::date AS new_date FROM account WHERE id=? AND upper(period) IS NULL AND period @> ?::date");
+		$sth->execute($date, $account_id, $date);
+		my $old_account = $sth->fetchrow_hashref;
+		if(!$old_account) {
+			die "Cannout change account $account_id at date $date, doesn't exist or it is already historical";
+		}
+
+		# If the new date overwrites the last period, delete the row, otherwise update it
+		my $changed_rows;
+		if($old_account->{'old_date'} eq $old_account->{'new_date'}) {
+			my $sth = $dbh->prepare("DELETE FROM account WHERE id=? AND period=?");
+			$changed_rows = $sth->execute($old_account->{'id'}, $old_account->{'period'});
+		} else {
+			my $sth = $dbh->prepare("UPDATE account SET period=daterange(lower(period), ?) WHERE id=? AND period=?");
+			$changed_rows = $sth->execute($date, $old_account->{id}, $old_account->{period});
+		}
+		if(!$changed_rows) {
+			die "Failed to change account $account_id, even though it existed";
+		}
+
+		my @db_fields;
+		my @db_values;
+
+		foreach(@{$object_info->{'required_fields'}}) {
+			push @db_fields, $_;
+			if(!exists($changes->{$_}) || length($changes->{$_}) == 0) {
+				push @db_values, $old_account->{$_};
+			} else {
+				push @db_values, delete $changes->{$_};
+			}
+		}
+
+		foreach(@{$object_info->{'optional_fields'}}) {
+			push @db_fields, $_;
+			if(exists($changes->{$_})) {
+				push @db_values, delete $changes->{$_};
+			} else {
+				push @db_values, $old_account->{$_};
+			}
+		}
+
+		foreach(keys %$changes) {
+			die "Unknown account field $_ in update_account\n";
+		}
+
+		unshift @db_fields, "period";
+		unshift @db_values, '['.$date.',)';
+
+		unshift @db_fields, "id";
+		unshift @db_values, $account_id;
+
+		my $query = "INSERT INTO account (" . join(", ", @db_fields) . ")";
+		$query .= " VALUES (" . join (", ", (('?') x @db_fields)) . ")";
+
+		$sth = $dbh->prepare($query);
+		$sth->execute(@db_values);
+		$dbh->commit;
+		return get_account($lim, $account_id, $date);
+	} catch {
+		$dbh->rollback;
+		die $_;
+	};
+}
+
 1;
