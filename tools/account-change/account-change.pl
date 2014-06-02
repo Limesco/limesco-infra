@@ -85,7 +85,7 @@ date.
 
 sub get_account {
 	my ($lim, $account_id, $date) = @_;
-	return $lim->get_account($account_id, $date);
+	return get_object($lim, _account_object_info(), $account_id, $date);
 }
 
 =head3 update_account($lim, $account_id, $changes, [$date])

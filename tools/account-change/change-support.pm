@@ -7,6 +7,30 @@ use lib '../../lib';
 use Limesco;
 use Try::Tiny;
 
+=head3 get_object($lim, $object_info, $object_id, [$date])
+
+Retrieve an object. $date is the optional date of interest; if not given,
+'today' is assumed. $object_id is the value of the primary key of the row in
+which we are interested.
+
+=cut
+
+sub get_object {
+	my ($lim, $object_info, $object_id, $date) = @_;
+	$date ||= 'today';
+	my $table_name = $object_info->{'table_name'};
+	my $primary_key = $object_info->{'primary_key'};
+
+	my $dbh = $lim->get_database_handle();
+	my $sth = $dbh->prepare("SELECT * FROM $table_name WHERE $primary_key=? AND period @> ?::date");
+	$sth->execute($object_id, $date);
+	my $object = $sth->fetchrow_hashref;
+	if(!$object) {
+		die "No such object with ID $object_id at date $date";
+	}
+	return $object;
+}
+
 =head3 create_object($lim, $object_info, $account, [$date])
 
 Create an account. $date is the optional starting date of the account; if not
@@ -60,7 +84,7 @@ sub create_object {
 	$sth->execute(@db_values);
 
 	my $account_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => $primary_key_seq});
-	return get_account($lim, $account_id, $date);
+	return get_object($lim, $object_info, $account_id, $date);
 }
 
 =head3 update_object($lim, $object_info, $account_id, $changes, [$date])
@@ -146,7 +170,7 @@ sub update_object {
 		$sth = $dbh->prepare($query);
 		$sth->execute(@db_values);
 		$dbh->commit;
-		return get_account($lim, $account_id, $date);
+		return get_object($lim, $object_info, $account_id, $date);
 	} catch {
 		$dbh->rollback;
 		die $_;
