@@ -5,9 +5,8 @@ use lib 'lib';
 use lib '../lib';
 use lib '../../lib';
 use Limesco;
+use Limesco::TemporalSupport;
 use Try::Tiny;
-
-do 'change-support.pm';
 
 =head1 account-change.pl
 

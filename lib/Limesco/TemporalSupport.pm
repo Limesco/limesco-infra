@@ -1,11 +1,19 @@
-#!/usr/bin/perl
+package Limesco::TemporalSupport;
 use strict;
 use warnings;
-use lib 'lib';
-use lib '../lib';
-use lib '../../lib';
-use Limesco;
 use Try::Tiny;
+use Exporter 'import';
+use Limesco;
+
+our $VERSION = $Limesco::VERSION;
+our @EXPORT = qw(get_object create_object update_object delete_object);
+
+=head1 Limesco::TemporalSupport
+
+This method provides support for retrieving, modifying and deleting temporal
+rows.
+
+=head2 Methods
 
 =head3 get_object($lim, $object_info, $object_id, [$date])
 
