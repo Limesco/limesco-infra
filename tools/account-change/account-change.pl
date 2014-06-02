@@ -34,25 +34,17 @@ if(!caller) {
 
 =cut
 
-# The fields without which an account may not be created. This should
-# correspond to NOT NULL fields without a DEFAULT in the account table.
-sub _account_required_fields {
-	return qw(first_name last_name street_address postal_code city email state);
-}
-
-# The fields which can be automatically filled in by the database. This list
-# should correspond to either NULL fields or those with a DEFAULT in the
-# account table.
-sub _account_optional_fields {
-	return qw(company_name password_hash admin);
-}
-
 # The field information used by change-support to handle temporal account
 # changes
 sub _account_object_info {
 	return {
-		required_fields => [_account_required_fields()],
-		optional_fields => [_account_optional_fields()],
+		# The fields without which an account may not be created. This should
+		# correspond to NOT NULL fields without a DEFAULT in the account table.
+		required_fields => [qw(first_name last_name street_address postal_code city email state)],
+		# The fields which can be automatically filled in by the database. This list
+		# should correspond to either NULL fields or those with a DEFAULT in the
+		# account table.
+		optional_fields => [qw(company_name password_hash admin)],
 		table_name => "account",
 		primary_key => "id",
 		primary_key_seq => "account_id_seq",
