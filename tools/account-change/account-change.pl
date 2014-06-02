@@ -7,6 +7,8 @@ use lib '../../lib';
 use Limesco;
 use Try::Tiny;
 
+do 'change-support.pm';
+
 =head1 account-change.pl
 
 Usage: account-change.pl [no CLI options available yet]
@@ -59,42 +61,10 @@ something failed.
 
 sub create_account {
 	my ($lim, $account, $date) = @_;
-	$date ||= 'today';
-	my $dbh = $lim->get_database_handle();
-
-	my @db_fields;
-	my @db_values;
-
-	foreach(_account_required_fields()) {
-		if(!exists($account->{$_}) || length($account->{$_}) == 0) {
-			die "Required account field $_ is missing in create_account";
-		}
-		push @db_fields, $_;
-		push @db_values, delete $account->{$_};
-	}
-
-	foreach(_account_optional_fields()) {
-		if(exists($account->{$_})) {
-			push @db_fields, $_;
-			push @db_values, delete $account->{$_};
-		}
-	}
-
-	foreach(keys %$account) {
-		die "Unknown account field $_ in create_account\n";
-	}
-
-	unshift @db_fields, "period";
-	unshift @db_values, '['.$date.',)';
-
-	my $query = "INSERT INTO account (id, " . join(", ", @db_fields) . ")";
-	$query .= " VALUES (NEXTVAL('account_id_seq'), " . join (", ", (('?') x @db_fields)) . ")";
-
-	my $sth = $dbh->prepare($query);
-	$sth->execute(@db_values);
-
-	my $account_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "account_id_seq"});
-	return get_account($lim, $account_id, $date);
+	return create_object($lim, {
+		required_fields => [_account_required_fields()],
+		optional_fields => [_account_optional_fields()],
+	}, $account, $date);
 }
 
 =head3 get_account($lim, $account_id, [$date])
