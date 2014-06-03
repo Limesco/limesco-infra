@@ -11,11 +11,15 @@ our @EXPORT = qw(get_object create_object update_object delete_object);
 =head1 Limesco::TemporalSupport
 
 This method provides support for retrieving, modifying and deleting temporal
-rows.
+rows. Every method accepts either a Limesco object or a database handle as the
+first parameter, which can be useful when you already have a database handle
+open. In case you give a database handle, the functions are transaction-aware,
+meaning that they will not open new transactions and will definitely die() when
+a part of the method failed allowing you to issue a rollback.
 
 =head2 Methods
 
-=head3 get_object($lim, $object_info, $object_id, [$date])
+=head3 get_object($lim | $dbh, $object_info, $object_id, [$date])
 
 Retrieve an object. $date is the optional date of interest; if not given,
 'today' is assumed. $object_id is the value of the primary key of the row in
@@ -29,7 +33,9 @@ sub get_object {
 	my $table_name = $object_info->{'table_name'};
 	my $primary_key = $object_info->{'primary_key'};
 
-	my $dbh = $lim->get_database_handle();
+	my $dbh_is_mine = ref($lim) eq "Limesco";
+	my $dbh = $dbh_is_mine ? $lim->get_database_handle() : $lim;
+
 	my $sth = $dbh->prepare("SELECT * FROM $table_name WHERE $primary_key=? AND period @> ?::date");
 	$sth->execute($object_id, $date);
 	my $object = $sth->fetchrow_hashref;
@@ -39,7 +45,7 @@ sub get_object {
 	return $object;
 }
 
-=head3 create_object($lim, $object_info, $object, [$date])
+=head3 create_object($lim | $dbh, $object_info, $object, [$date])
 
 Create an object. $date is the optional starting date of the object; if not
 given, 'today' is assumed. $object must contain all required fields from the
@@ -55,7 +61,9 @@ something failed.
 sub create_object {
 	my ($lim, $object_info, $object, $date) = @_;
 	$date ||= 'today';
-	my $dbh = $lim->get_database_handle();
+
+	my $dbh_is_mine = ref($lim) eq "Limesco";
+	my $dbh = $dbh_is_mine ? $lim->get_database_handle() : $lim;
 
 	my $table_name = $object_info->{'table_name'};
 	my $primary_key = $object_info->{'primary_key'};
@@ -119,7 +127,7 @@ sub create_object {
 	return get_object($lim, $object_info, $object_id, $date);
 }
 
-=head3 update_object($lim, $object_info, $object_id, $changes, [$date])
+=head3 update_object($lim | $dbh, $object_info, $object_id, $changes, [$date])
 
 Update an object. $date is the optional date of the changes; if not given,
 'today' is assumed. $object_id is the primary key value of the object to
@@ -135,9 +143,11 @@ failed.
 sub update_object {
 	my ($lim, $object_info, $object_id, $changes, $date) = @_;
 	$date ||= 'today';
-	my $dbh = $lim->get_database_handle();
 
-	$dbh->begin_work;
+	my $dbh_is_mine = ref($lim) eq "Limesco";
+	my $dbh = $dbh_is_mine ? $lim->get_database_handle() : $lim;
+
+	$dbh->begin_work if $dbh_is_mine;
 
 	try {
 		my $table_name = $object_info->{'table_name'};
@@ -207,15 +217,15 @@ sub update_object {
 
 		$sth = $dbh->prepare($query);
 		$sth->execute(@db_values);
-		$dbh->commit;
+		$dbh->commit if $dbh_is_mine;
 		return get_object($lim, $object_info, $object_id, $date);
 	} catch {
-		$dbh->rollback;
+		$dbh->rollback if $dbh_is_mine;
 		die $_;
 	};
 }
 
-=head3 delete_object($lim, $object_info, $object_id, [$date])
+=head3 delete_object($lim | $dbh, $object_info, $object_id, [$date])
 
 Delete an object. $date is the optional date of deletion; if not given,
 'today' is assumed.
@@ -225,9 +235,11 @@ Delete an object. $date is the optional date of deletion; if not given,
 sub delete_object {
 	my ($lim, $object_info, $object_id, $date) = @_;
 	$date ||= 'today';
-	my $dbh = $lim->get_database_handle();
 
-	$dbh->begin_work;
+	my $dbh_is_mine = ref($lim) eq "Limesco";
+	my $dbh = $dbh_is_mine ? $lim->get_database_handle() : $lim;
+
+	$dbh->begin_work if $dbh_is_mine;
 
 	try {
 		my $table_name = $object_info->{'table_name'};
@@ -255,9 +267,9 @@ sub delete_object {
 			die "Failed to delete object $object_id, even though it existed";
 		}
 
-		$dbh->commit;
+		$dbh->commit if $dbh_is_mine;
 	} catch {
-		$dbh->rollback;
+		$dbh->rollback if $dbh_is_mine;
 		die $_;
 	};
 }

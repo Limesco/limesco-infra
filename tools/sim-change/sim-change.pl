@@ -13,7 +13,8 @@ use Try::Tiny;
 Usage: sim-change.pl [no CLI options available yet]
 
 This file contains methods to create SIMs, change their properties and delete
-them, in the temporal fashion that the database uses.
+them, in the temporal fashion that the database uses. See the documentation for
+Limesco::TemporalSupport for more information.
 
 =cut
 
@@ -52,7 +53,7 @@ sub _sim_object_info {
 	};
 }
 
-=head3 create_sim($lim, $sim, [$date])
+=head3 create_sim($lim | $dbh, $sim, [$date])
 
 Create a SIM. $date is the optional starting date of the SIM; if not given,
 'today' is assumed. $sim must contain all required fields (e.g. iccid and
@@ -70,7 +71,7 @@ sub create_sim {
 	return create_object($lim, _sim_object_info(), $sim, $date);
 }
 
-=head3 get_sim($lim, $sim_iccid, [$date])
+=head3 get_sim($lim | $dbh, $sim_iccid, [$date])
 
 Retrieve a SIM. If $date is given, retrieve an SIM on the given date.
 
@@ -81,7 +82,7 @@ sub get_sim {
 	return get_object($lim, _sim_object_info(), $sim_id, $date);
 }
 
-=head3 update_sim($lim, $sim_iccid, $changes, [$date])
+=head3 update_sim($lim | $dbh, $sim_iccid, $changes, [$date])
 
 Update a SIM. $date is the optional date of the changes; if not given, 'today'
 is assumed. $sim_iccid is the ICCID of the SIM to change, $changes is a hashref
@@ -99,7 +100,7 @@ sub update_sim {
 	return update_object($lim, _sim_object_info(), $sim_iccid, $changes, $date);
 }
 
-=head3 delete_sim($lim, $sim_iccid, [$date])
+=head3 delete_sim($lim | $dbh, $sim_iccid, [$date])
 
 Delete a SIM. $date is the optional date of deletion; if not given, 'today' is
 assumed.

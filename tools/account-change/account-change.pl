@@ -13,7 +13,8 @@ use Try::Tiny;
 Usage: account-change.pl [no CLI options available yet]
 
 This file contains methods to create accounts, change their properties and
-delete them, in the temporal fashion that the database uses.
+delete them, in the temporal fashion that the database uses. See the
+documentation for Limesco::TemporalSupport for more information.
 
 =cut
 
@@ -50,7 +51,7 @@ sub _account_object_info {
 	};
 }
 
-=head3 create_account($lim, $account, [$date])
+=head3 create_account($lim | $dbh, $account, [$date])
 
 Create an account. $date is the optional starting date of the account; if not
 given, 'today' is assumed. $account must contain all required fields (e.g.
@@ -67,7 +68,7 @@ sub create_account {
 	return create_object($lim, _account_object_info(), $account, $date);
 }
 
-=head3 get_account($lim, $account_id, [$date])
+=head3 get_account($lim | $dbh, $account_id, [$date])
 
 Retrieve an account. If $date is given, retrieve an account on the given
 date.
@@ -79,7 +80,7 @@ sub get_account {
 	return get_object($lim, _account_object_info(), $account_id, $date);
 }
 
-=head3 update_account($lim, $account_id, $changes, [$date])
+=head3 update_account($lim | $dbh, $account_id, $changes, [$date])
 
 Update an account. $date is the optional date of the changes; if not given,
 'today' is assumed. $account_id is the ID of the account to change, $changes
@@ -97,7 +98,7 @@ sub update_account {
 	return update_object($lim, _account_object_info(), $account_id, $changes, $date);
 }
 
-=head3 delete_account($lim, $account_id, [$date])
+=head3 delete_account($lim | $dbh, $account_id, [$date])
 
 Delete an account. $date is the optional date of deletion; if not given,
 'today' is assumed.
