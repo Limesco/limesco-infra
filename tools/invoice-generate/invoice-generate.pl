@@ -8,6 +8,10 @@ use Limesco;
 use Try::Tiny;
 use DateTime;
 
+# The SIM changer is necessary for updating the last-invoiced information in a
+# SIM after generating an invoice for it
+do '../sim-change/sim-change.pl';
+
 =head1 invoice-generate.pl
 
 Usage: invoice-generate.pl [infra-options] { --all-accounts | --account <accountID> [ --account <accountID> [ ... ] ] } --date <date>
@@ -352,11 +356,13 @@ sub generate_invoice {
 		my $sth = $dbh->prepare("SELECT * FROM sim WHERE owner_account_id=? AND activation_invoice_id IS NULL AND state != 'DISABLED'");
 		$sth->execute($account_id);
 		while(my $sim = $sth->fetchrow_hashref) {
-			# TODO: this is a hack
-			# * not only the current record, but also all future records must be updated
-			# * the current record must not be updated, but ended and a new record inserted
-			#   (sim-change functionality?)
-			$dbh->do("UPDATE sim SET activation_invoice_id=? WHERE iccid=? AND period @> 'now'::date", undef, $invoice_id, $sim->{'iccid'});
+			# TODO: this calls die() when $date is already a 'history record' (i.e. there
+			# is a planned update for this SIM after $date); this can be made more robust
+			# by implementing 'history changing support' in update_sim so that it is able
+			# to update all records starting with $date into infinity.
+			update_sim($dbh, $sim->{'iccid'}, {
+				activation_invoice_id => $invoice_id,
+			}, $date);
 			$normal_itemline->($invoice_id, "Activatie SIM-kaart", 1, $SIM_CARD_ACTIVATION_PRICE);
 		}
 
@@ -431,11 +437,14 @@ sub generate_invoice {
 
 				$invoicing_month = $end_of_this_period->add(days => 1);
 			}
-			# TODO: this is a hack
-			# * not only the current record, but also all future records must be updated
-			# * the current record must not be updated, but ended and a new record inserted
-			#   (sim-change functionality?)
-			$dbh->do("UPDATE sim SET last_monthly_fees_invoice_id=?, last_monthly_fees_month=? WHERE iccid=? AND period @> 'now'::date", undef, $invoice_id, $date, $sim->{'iccid'});
+			# TODO: this calls die() when $date is already a 'history record' (i.e. there
+			# is a planned update for this SIM after $date); this can be made more robust
+			# by implementing 'history changing support' in update_sim so that it is able
+			# to update all records starting with $date into infinity.
+			update_sim($dbh, $sim->{'iccid'}, {
+				last_monthly_fees_invoice_id => $invoice_id,
+				last_monthly_fees_month => $date,
+			}, $date);
 		}
 
 		my %pricings;
