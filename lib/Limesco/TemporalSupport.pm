@@ -57,18 +57,32 @@ sub create_object {
 	$date ||= 'today';
 	my $dbh = $lim->get_database_handle();
 
+	my $table_name = $object_info->{'table_name'};
+	my $primary_key = $object_info->{'primary_key'};
+	my $primary_key_seq = $object_info->{'primary_key_seq'};
+
 	my @db_fields;
 	my @db_values;
+	my $primary_key_value;
 
 	foreach(@{$object_info->{'required_fields'}}) {
 		if(!exists($object->{$_}) || length($object->{$_}) == 0) {
 			die "Required object field $_ is missing in create_object";
+		}
+		if($_ eq $primary_key) {
+			# If the primary key is in required_fields, it must be given instead of
+			# being auto-initialised based on a sequence.
+			$primary_key_value = delete $object->{$_};
+			next;
 		}
 		push @db_fields, $_;
 		push @db_values, delete $object->{$_};
 	}
 
 	foreach(@{$object_info->{'optional_fields'}}) {
+		if($_ eq $primary_key) {
+			die "Primary key may never be in optional_fields for an object";
+		}
 		if(exists($object->{$_})) {
 			push @db_fields, $_;
 			push @db_values, delete $object->{$_};
@@ -76,23 +90,32 @@ sub create_object {
 	}
 
 	foreach(keys %$object) {
+		if($_ eq $primary_key) {
+			die "Primary key value given to create_object, but if that's allowed it must be one of the required_fields";
+		}
 		die "Unknown object field $_ in create_object\n";
 	}
 
 	unshift @db_fields, "period";
 	unshift @db_values, '['.$date.',)';
 
-	my $table_name = $object_info->{'table_name'};
-	my $primary_key = $object_info->{'primary_key'};
-	my $primary_key_seq = $object_info->{'primary_key_seq'};
+	my $primary_key_init_string;
+	if($primary_key_value) {
+		unshift @db_values, $primary_key_value;
+		$primary_key_init_string = "?";
+	} elsif($primary_key_seq) {
+		$primary_key_init_string = "NEXTVAL('$primary_key_seq')";
+	} else {
+		die "Don't know how to init primary key for this object type: no primary key value is given, no primary key sequence is known. Is the primary key missing in the required fields list?";
+	}
 
 	my $query = "INSERT INTO $table_name ($primary_key, " . join(", ", @db_fields) . ")";
-	$query .= " VALUES (NEXTVAL('$primary_key_seq'), " . join (", ", (('?') x @db_fields)) . ")";
+	$query .= " VALUES ($primary_key_init_string, " . join (", ", (('?') x @db_fields)) . ")";
 
 	my $sth = $dbh->prepare($query);
 	$sth->execute(@db_values);
 
-	my $object_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => $primary_key_seq});
+	my $object_id = $primary_key_value ? $primary_key_value : $dbh->last_insert_id(undef, undef, undef, undef, {sequence => $primary_key_seq});
 	return get_object($lim, $object_info, $object_id, $date);
 }
 
@@ -146,6 +169,12 @@ sub update_object {
 		my @db_values;
 
 		foreach(@{$object_info->{'required_fields'}}) {
+			if($_ eq $primary_key) {
+				if(exists($changes->{$_})) {
+					die "The primary key of an object may never be listed in the changes of update_object";
+				}
+				next;
+			}
 			push @db_fields, $_;
 			if(!exists($changes->{$_}) || length($changes->{$_}) == 0) {
 				push @db_values, $old_object->{$_};
