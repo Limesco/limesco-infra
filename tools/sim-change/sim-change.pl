@@ -82,6 +82,18 @@ sub get_sim {
 	return get_object($lim, _sim_object_info(), $sim_id, $date);
 }
 
+=head3 list_sims($lim | $dbh, [$date])
+
+Retrieve a list of SIMs active on the given $date. If $date is not given,
+only SIMs active 'today' are returned.
+
+=cut
+
+sub list_sims {
+	my ($lim, $date) = @_;
+	return list_objects($lim, _sim_object_info(), $date);
+}
+
 =head3 update_sim($lim | $dbh, $sim_iccid, $changes, [$date])
 
 Update a SIM. $date is the optional date of the changes; if not given, 'today'

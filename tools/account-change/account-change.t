@@ -12,7 +12,7 @@ use Try::Tiny;
 use POSIX 'strftime';
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 52;
+plan tests => 54;
 
 require_ok("account-change.pl");
 
@@ -45,8 +45,9 @@ try {
 diag($exception) if($exception);
 ok(!defined($exception), "No exception thrown while creating account");
 ok($account, "Account was returned correctly");
+my $accountid1 = $account->{'id'};
 is_deeply($account, {
-	id => $account->{'id'},
+	id => $accountid1,
 	period => '[2014-02-03,)',
 	company_name => "Test Company Name",
 	first_name => "Test First Name",
@@ -95,7 +96,9 @@ try {
 diag($exception) if($exception);
 ok(!defined($exception), "No exception thrown while creating account with starting date today");
 ok($account, "Account was created correctly");
-is($account->{'period'}, strftime("[%F,)", localtime(time)), "Starting date is today");
+my $accountid2 = $account->{'id'};
+my $period2 = strftime("[%F,)", localtime(time));
+is($account->{'period'}, $period2, "Starting date is today");
 
 # Account without company name: just have it unset
 undef $exception;
@@ -116,9 +119,10 @@ try {
 };
 diag($exception) if($exception);
 ok(!defined($exception), "No exception thrown while creating account without company_name");
+my $accountid3 = $account->{'id'};
 isnt($account->{'id'}, $returned_account->{'id'}, "ID of new account is different");
 is_deeply($account, {
-	id => $account->{'id'},
+	id => $accountid3,
 	period => '[2014-03-03,)',
 	company_name => undef,
 	first_name => "Test First Name",
@@ -150,8 +154,9 @@ try {
 };
 diag($exception) if($exception);
 ok(!defined($exception), "No exception thrown while creating account without optional bits");
+my $accountid4 = $account->{'id'};
 is_deeply($account, {
-	id => $account->{'id'},
+	id => $accountid4,
 	period => '[2014-03-03,)',
 	company_name => undef,
 	first_name => "Test First Name",
@@ -166,7 +171,7 @@ is_deeply($account, {
 }, "Account without optional bits was fully created");
 
 # This must be the last account that is succesfully created in this test
-my $account_id = $account->{'id'};
+my $account_id = $accountid4;
 
 # Account without name information: throw an exception
 undef $exception;
@@ -245,6 +250,79 @@ try {
 
 ok(!defined($account), "No account created when unknown field is given");
 ok(defined($exception), "Exception thrown when account was created with unknown field in it");
+
+# Retrieving all accounts
+my @accounts = list_accounts($lim);
+is_deeply(\@accounts,
+[{
+	id => $accountid1,
+	period => '[2014-02-03,)',
+	company_name => "Test Company Name",
+	first_name => "Test First Name",
+	last_name => "Test Last Name",
+	street_address => "Test Street Address",
+	postal_code => "Test Postal Code",
+	city => "Test City",
+	email => 'testemail@limesco.nl',
+	password_hash => "",
+	admin => '0',
+	state => "CONFIRMED",
+}, {
+	id => $accountid2,
+	period => $period2,
+	company_name => "Test Company Name",
+	first_name => "Test First Name",
+	last_name => "Test Last Name",
+	street_address => "Test Street Address",
+	postal_code => "Test Postal Code",
+	city => "Test City",
+	email => 'testemail@limesco.nl',
+	password_hash => "",
+	admin => 0,
+	state => "CONFIRMED",
+}, {
+	id => $accountid3,
+	period => '[2014-03-03,)',
+	company_name => undef,
+	first_name => "Test First Name",
+	last_name => "Test Last Name",
+	street_address => "Test Street Address",
+	postal_code => "Test Postal Code",
+	city => "Test City",
+	email => 'testemail@limesco.nl',
+	password_hash => "",
+	admin => '1',
+	state => "CONFIRMED",
+}, {
+	id => $accountid4,
+	period => '[2014-03-03,)',
+	company_name => undef,
+	first_name => "Test First Name",
+	last_name => "Test Last Name",
+	street_address => "Test Street Address",
+	postal_code => "Test Postal Code",
+	city => "Test City",
+	email => 'testemail@limesco.nl',
+	password_hash => undef,
+	admin => '0',
+	state => "CONFIRMED",
+}], "list_accounts returns all four accounts just fine");
+@accounts = list_accounts($lim, "2014-02-03");
+is_deeply(\@accounts,
+[{
+	id => $accountid1,
+	period => '[2014-02-03,)',
+	company_name => "Test Company Name",
+	first_name => "Test First Name",
+	last_name => "Test Last Name",
+	street_address => "Test Street Address",
+	postal_code => "Test Postal Code",
+	city => "Test City",
+	email => 'testemail@limesco.nl',
+	password_hash => "",
+	admin => '0',
+	state => "CONFIRMED",
+}], "list_accounts returns only oldest account when date is given");
 
 # Retrieving accounts with date
 $account = get_account($lim, $account_id);

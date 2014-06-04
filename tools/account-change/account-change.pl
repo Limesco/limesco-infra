@@ -80,6 +80,18 @@ sub get_account {
 	return get_object($lim, _account_object_info(), $account_id, $date);
 }
 
+=head3 list_accounts($lim | $dbh, [$date])
+
+Retrieve a list of accounts active on the given $date. If $date is not given,
+only accounts active 'today' are returned.
+
+=cut
+
+sub list_accounts {
+	my ($lim, $date) = @_;
+	return list_objects($lim, _account_object_info(), $date);
+}
+
 =head3 update_account($lim | $dbh, $account_id, $changes, [$date])
 
 Update an account. $date is the optional date of the changes; if not given,

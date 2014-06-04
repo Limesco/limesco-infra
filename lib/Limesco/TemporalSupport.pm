@@ -6,7 +6,7 @@ use Exporter 'import';
 use Limesco;
 
 our $VERSION = $Limesco::VERSION;
-our @EXPORT = qw(get_object create_object update_object delete_object);
+our @EXPORT = qw(get_object list_objects create_object update_object delete_object);
 
 =head1 Limesco::TemporalSupport
 
@@ -43,6 +43,31 @@ sub get_object {
 		die "No such object with ID $object_id at date $date";
 	}
 	return $object;
+}
+
+=head3 list_objects($lim | $dbh, $object_info, [$date])
+
+Retrieve all objects as active on the given $date. If $date is not given,
+'today' is assumed. Objects are returned in the order of their primary key.
+
+=cut
+
+sub list_objects {
+	my ($lim, $object_info, $date) = @_;
+	$date ||= 'today';
+	my $table_name = $object_info->{'table_name'};
+	my $primary_key = $object_info->{'primary_key'};
+
+	my $dbh_is_mine = ref($lim) eq "Limesco";
+	my $dbh = $dbh_is_mine ? $lim->get_database_handle() : $lim;
+
+	my $sth = $dbh->prepare("SELECT * FROM $table_name WHERE period @> ?::date ORDER BY $primary_key ASC");
+	$sth->execute($date);
+	my @objects;
+	while(my $object = $sth->fetchrow_hashref) {
+		push @objects, $object;
+	}
+	return @objects;
 }
 
 =head3 create_object($lim | $dbh, $object_info, $object, [$date])
