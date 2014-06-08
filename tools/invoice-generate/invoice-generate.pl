@@ -47,7 +47,7 @@ if(!caller) {
 	}
 
 	if($all_accounts) {
-		@account_ids = get_all_active_account_ids($lim);
+		@account_ids = get_all_active_account_ids($lim, $date);
 	} else {
 		for(my $i = 0; $i < @account_ids; ++$i) {
 			if($account_ids[$i] !~ /^\d+$/) {
@@ -79,19 +79,21 @@ if(!caller) {
 
 =head2 Methods
 
-=head3 get_all_active_account_ids($lim)
+=head3 get_all_active_account_ids($lim, [$date])
 
-Returns an array of account IDs whose state is CONFIRMED.
+Returns an array of active account IDs (those where $date falls within the 'period'
+field). If not given, $date is 'today'.
 
 =cut
 
 sub get_all_active_account_ids {
-	my ($lim) = @_;
+	my ($lim, $date) = @_;
 	my $dbh = $lim->get_database_handle();
+	$date ||= 'today';
 
 	my @accounts;
-	my $sth = $dbh->prepare("SELECT id FROM account WHERE state = 'CONFIRMED'");
-	$sth->execute();
+	my $sth = $dbh->prepare("SELECT id FROM account WHERE period @> ?::date");
+	$sth->execute($date);
 	while(my $row = $sth->fetchrow_arrayref) {
 		push @accounts, $row->[0];
 	}
