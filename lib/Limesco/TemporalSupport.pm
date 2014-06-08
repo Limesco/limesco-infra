@@ -189,7 +189,7 @@ sub update_object {
 
 		# If the new date overwrites the last period, delete the row, otherwise update it
 		my $changed_rows;
-		if($old_object->{'old_date'} eq $old_object->{'new_date'}) {
+		if($old_object->{'old_date'} && $old_object->{'old_date'} eq $old_object->{'new_date'}) {
 			my $sth = $dbh->prepare("DELETE FROM $table_name WHERE $primary_key=? AND period=?");
 			$changed_rows = $sth->execute($old_object->{$primary_key}, $old_object->{'period'});
 		} else {
@@ -280,7 +280,7 @@ sub delete_object {
 
 		# If the new date overwrites the last period, delete the row, otherwise update it
 		my $changed_rows;
-		if($old_object->{'old_date'} eq $old_object->{'new_date'}) {
+		if($old_object->{'old_date'} && $old_object->{'old_date'} eq $old_object->{'new_date'}) {
 			my $sth = $dbh->prepare("DELETE FROM $table_name WHERE $primary_key=? AND period=?");
 			$changed_rows = $sth->execute($old_object->{$primary_key}, $old_object->{'period'});
 		} else {
