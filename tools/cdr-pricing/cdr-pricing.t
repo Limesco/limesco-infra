@@ -121,10 +121,10 @@ is($unpriced_cdr_priced, 0, "Unpriced CDR still unpricable");
 
 # Add an account, SIM and externalAccount mapping so the CDR is pricable
 $dbh->do("INSERT INTO account (id, period, first_name, last_name,
-	street_address, postal_code, city, email, state)
+	street_address, postal_code, city, email)
 	VALUES (NEXTVAL('account_id_seq'), '(,)', 'First Name',
 	'Last Name', 'Street Address 123', '9876 BA', 'City Name',
-	'test\@test.org', 'CONFIRMED');");
+	'test\@test.org');");
 my $account_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "account_id_seq"});
 my $sim_iccid = '123456789012345678';
 $dbh->do("INSERT INTO sim (iccid, period, state, puk, owner_account_id,

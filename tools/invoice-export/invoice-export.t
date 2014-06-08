@@ -12,7 +12,7 @@ use Try::Tiny;
 use File::Temp qw(tempdir);
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 32;
+plan tests => 31;
 
 require_ok("invoice-export.pl");
 
@@ -23,10 +23,10 @@ require('../upgrade/upgrade.pl');
 initialize_database($lim);
 
 $dbh->do("INSERT INTO account (id, period, first_name, last_name,
-	street_address, postal_code, city, email, state)
+	street_address, postal_code, city, email)
 	VALUES (NEXTVAL('account_id_seq'), '(,)', 'First Name',
 	'Last Name', 'Street Address 123', '9876 BA', 'City Name',
-	'test\@test.org', 'CONFIRMED');");
+	'test\@test.org');");
 
 my $account_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "account_id_seq"});
 my $invoice_id = '14C000001';
@@ -59,7 +59,6 @@ Account streetaddress: \beginperl $account->{'street_address'} \endperl
 Account postalcode: \beginperl $account->{'postal_code'} \endperl
 Account city: \beginperl $account->{'city'} \endperl
 Account email: \beginperl $account->{'email'} \endperl
-Account state: \beginperl $account->{'state'} \endperl
 
 \beginperl
 	my $i = 0;
@@ -102,7 +101,6 @@ my @lines = (
 	"Account postalcode: 9876 BA",
 	"Account city: City Name",
 	'Account email: test@test.org',
-	"Account state: CONFIRMED",
 	"",
 	"Itemline 1",
 	"Type: NORMAL",

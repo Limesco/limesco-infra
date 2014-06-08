@@ -36,7 +36,6 @@ try {
 		email => 'testemail@limesco.nl',
 		password_hash => "",
 		admin => 0,
-		state => "CONFIRMED",
 	}, '2014-02-03');
 } catch {
 	$exception = $_ || 1;
@@ -58,7 +57,6 @@ is_deeply($account, {
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => '0',
-	state => "CONFIRMED",
 }, "Account was fully created");
 
 undef $exception;
@@ -87,7 +85,6 @@ try {
 		email => 'testemail@limesco.nl',
 		password_hash => "",
 		admin => 0,
-		state => "CONFIRMED",
 	});
 } catch {
 	$exception = $_ || 1;
@@ -112,7 +109,6 @@ try {
 		email => 'testemail@limesco.nl',
 		password_hash => "",
 		admin => 1,
-		state => "CONFIRMED",
 	}, '2014-03-03');
 } catch {
 	$exception = $_ || 1;
@@ -133,7 +129,6 @@ is_deeply($account, {
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => '1',
-	state => "CONFIRMED",
 }, "Account without company name was fully created");
 
 # Account without password and admin bit
@@ -147,7 +142,6 @@ try {
 		postal_code => "Test Postal Code",
 		city => "Test City",
 		email => 'testemail@limesco.nl',
-		state => 'CONFIRMED',
 	}, '2014-03-03');
 } catch {
 	$exception = $_ || 1;
@@ -167,7 +161,6 @@ is_deeply($account, {
 	email => 'testemail@limesco.nl',
 	password_hash => undef,
 	admin => '0',
-	state => "CONFIRMED",
 }, "Account without optional bits was fully created");
 
 # This must be the last account that is succesfully created in this test
@@ -185,7 +178,6 @@ try {
 		email => 'testemail@limesco.nl',
 		password_hash => "",
 		admin => 0,
-		state => "CONFIRMED",
 	}, '2014-02-03');
 } catch {
 	$exception = $_ || 1;
@@ -218,7 +210,6 @@ try {
 		email => 'testemail@limesco.nl',
 		password_hash => "",
 		admin => 0,
-		state => "CONFIRMED",
 	}, '2014-02-03');
 } catch {
 	$exception = $_ || 1;
@@ -242,7 +233,6 @@ try {
 		email => 'testemail@limesco.nl',
 		password_hash => "",
 		admin => 0,
-		state => "CONFIRMED",
 	}, '2014-02-03');
 } catch {
 	$exception = $_ || 1;
@@ -266,7 +256,6 @@ is_deeply(\@accounts,
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => '0',
-	state => "CONFIRMED",
 }, {
 	id => $accountid2,
 	period => $period2,
@@ -279,7 +268,6 @@ is_deeply(\@accounts,
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => 0,
-	state => "CONFIRMED",
 }, {
 	id => $accountid3,
 	period => '[2014-03-03,)',
@@ -292,7 +280,6 @@ is_deeply(\@accounts,
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => '1',
-	state => "CONFIRMED",
 }, {
 	id => $accountid4,
 	period => '[2014-03-03,)',
@@ -305,7 +292,6 @@ is_deeply(\@accounts,
 	email => 'testemail@limesco.nl',
 	password_hash => undef,
 	admin => '0',
-	state => "CONFIRMED",
 }], "list_accounts returns all four accounts just fine");
 @accounts = list_accounts($lim, "2014-02-03");
 is_deeply(\@accounts,
@@ -321,7 +307,6 @@ is_deeply(\@accounts,
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => '0',
-	state => "CONFIRMED",
 }], "list_accounts returns only oldest account when date is given");
 
 # Retrieving accounts with date
@@ -374,7 +359,6 @@ is_deeply(get_account($lim, $account_id), {
 	email => 'testemail@limesco.nl',
 	password_hash => undef,
 	admin => '0',
-	state => "CONFIRMED",
 }, "Account is still completely the same");
 
 # Partial property changes
@@ -401,7 +385,6 @@ is_deeply(get_account($lim, $account_id), {
 	email => 'testemail@limesco.nl',
 	password_hash => undef,
 	admin => '0',
-	state => "CONFIRMED",
 }, "Company name changed");
 
 is_deeply(get_account($lim, $account_id, '2014-03-09'), {
@@ -416,23 +399,21 @@ is_deeply(get_account($lim, $account_id, '2014-03-09'), {
 	email => 'testemail@limesco.nl',
 	password_hash => undef,
 	admin => '0',
-	state => "CONFIRMED",
 }, "Old account period was updated, no other changes");
 
-# Three properties at a time
+# Two properties at a time
 $exception = undef;
 try {
 	update_account($lim, $account_id, {
 		email => 'testmailtwo@limesco.nl',
 		admin => 1,
-		state => 'CONFIRMATION_REQUESTED',
 	}, '2014-03-12');
 } catch {
 	$exception = $_ || 1;
 };
 
 diag($exception) if($exception);
-ok(!defined($exception), "No exception thrown while changing three properties at once");
+ok(!defined($exception), "No exception thrown while changing two properties at once");
 is_deeply(get_account($lim, $account_id), {
 	id => $account_id,
 	period => '[2014-03-12,)',
@@ -445,8 +426,7 @@ is_deeply(get_account($lim, $account_id), {
 	email => 'testmailtwo@limesco.nl',
 	password_hash => undef,
 	admin => 1,
-	state => "CONFIRMATION_REQUESTED",
-}, "Three properties changed");
+}, "Two properties changed");
 
 # Another property at the same date
 $exception = undef;
@@ -473,8 +453,7 @@ is_deeply(get_account($lim, $account_id), {
 	email => 'testmailtwo@limesco.nl',
 	password_hash => undef,
 	admin => 0,
-	state => "CONFIRMATION_REQUESTED",
-}, "Three properties changed");
+}, "Two properties changed");
 
 # Properties that can't be changed
 $exception = undef;
@@ -522,7 +501,6 @@ is_deeply(get_account($lim, $account_id), {
 	email => 'testmailtwo@limesco.nl',
 	password_hash => undef,
 	admin => 0,
-	state => "CONFIRMATION_REQUESTED",
 }, "No properties changed");
 
 # Make a change in history, that's not allowed
@@ -548,7 +526,6 @@ is_deeply(get_account($lim, $account_id), {
 	email => 'testmailtwo@limesco.nl',
 	password_hash => undef,
 	admin => 0,
-	state => "CONFIRMATION_REQUESTED",
 }, "Company name changed");
 
 # Make a change in latest record, that's allowed
@@ -575,7 +552,6 @@ is_deeply(get_account($lim, $account_id), {
 	email => 'testmailtwo@limesco.nl',
 	password_hash => undef,
 	admin => 0,
-	state => "CONFIRMATION_REQUESTED",
 }, "Street name changed");
 
 # Try to delete an account in history
@@ -630,7 +606,6 @@ is_deeply(get_account($lim, $account_id, '2014-03-11'), {
 	email => 'testemail@limesco.nl',
 	password_hash => undef,
 	admin => '0',
-	state => "CONFIRMED",
 }, "Account still exists before deletion");
 
 undef $exception;

@@ -117,7 +117,7 @@ Returns the latest schema version supported by this tool.
 =cut
 
 sub get_latest_schema_version {
-	return 3;
+	return 4;
 }
 
 =head3 update_schema_version($lim, $dbh, $version)
@@ -187,7 +187,6 @@ sub initialize_database {
 		# See benchmark: http://www.depesz.com/2010/03/02/charx-vs-varcharx-vs-varchar-vs-text/
 		$dbh->do("CREATE DOMAIN shorttext AS TEXT CONSTRAINT max_length CHECK (LENGTH(VALUE) <= 100);");
 		$dbh->do("CREATE DOMAIN longtext AS TEXT CONSTRAINT max_length CHECK (LENGTH(VALUE) <= 400);");
-		$dbh->do("CREATE TYPE accountstate AS ENUM('UNPAID', 'UNCONFIRMED', 'CONFIRMATION_REQUESTED', 'CONFIRMED', 'DEACTIVATED');");
 
 		$dbh->do("CREATE SEQUENCE account_id_seq;");
 
@@ -203,7 +202,6 @@ sub initialize_database {
 			email SHORTTEXT NOT NULL,
 			password_hash SHORTTEXT,
 			admin BOOLEAN NOT NULL DEFAULT FALSE,
-			state ACCOUNTSTATE NOT NULL,
 			PRIMARY KEY (id, period),
 			EXCLUDE USING gist (id WITH =, period WITH &&)
 		);");
@@ -444,7 +442,14 @@ sub upgrade_database {
 			$current_version = 3;
 		}
 
-		if($current_version > 3) {
+		if($current_version == 3) {
+			$dbh->do("ALTER TABLE account DROP COLUMN state");
+			$dbh->do("DROP TYPE accountstate");
+			update_schema_version($lim, $dbh, 4);
+			$current_version = 4;
+		}
+
+		if($current_version > 4) {
 			die "Not implemented";
 		}
 

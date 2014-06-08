@@ -40,7 +40,7 @@ sub _account_object_info {
 	return {
 		# The fields without which an account may not be created. This should
 		# correspond to NOT NULL fields without a DEFAULT in the account table.
-		required_fields => [qw(first_name last_name street_address postal_code city email state)],
+		required_fields => [qw(first_name last_name street_address postal_code city email)],
 		# The fields which can be automatically filled in by the database. This list
 		# should correspond to either NULL fields or those with a DEFAULT in the
 		# account table.
