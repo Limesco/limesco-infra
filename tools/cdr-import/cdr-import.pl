@@ -186,12 +186,21 @@ sub retrieve_speakup_cdrs {
 	if($response->content_type ne "text/csv") {
 		die "SpeakUp CDR request for $date failed: content-type is not text/csv";
 	}
+	import_speakup_cdrs_from_csv($lim, $callback, ${$response->content_ref});
+}
+
+=head3 import_speakup_cdrs_from_csv($lim, $callback, $csv_content)
+
+=cut
+
+sub import_speakup_cdrs_from_csv {
+	my ($lim, $callback, $content) = @_;
 	my $csv = Text::CSV->new({binary => 1})
 		or die "Cannot use CSV: ".Text::CSV->error_diag();
 	
 	my $i = 0;
 	my @column_names;
-	for(split /^/, ${$response->content_ref}) {
+	for(split /^/, $content) {
 		++$i;
 		if(!$csv->parse($_)) {
 			die "Failed to parse line $i of response";
