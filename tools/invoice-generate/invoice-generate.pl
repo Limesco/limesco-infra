@@ -266,9 +266,19 @@ sub phonenumber_to_apn_type_in_month {
 	# subquery off and accepting periods during the given month.
 	my $date = DateTime->new(year => $year, month => $month, day => 1);
 	my $sth = $dbh->prepare("SELECT data_type FROM sim WHERE owner_account_id=? AND period @> ?::date AND iccid=
-		(SELECT sim_iccid FROM phonenumber WHERE phonenumber.phonenumber=? AND period @> ?::date)");
+		(SELECT sim_iccid FROM phonenumber WHERE phonenumber.phonenumber=? AND (period @> ?::date "
+		# Also accept if the number was valid for this SIM one day
+		# before the CDR occured. This fixes the situation where a
+		# number is ported on the first of the month, and data CDRs
+		# occuring just before the port have a phone number that is
+		# never valid during the month. With this fix, phone numbers
+		# that are valid the last day of the month before are also
+		# accepted. This introduces the risk of a number being reused
+		# within a day for another SIM within the same account with a
+		# different data type, which is an extreme corner case.
+		. " OR period @> (?::date - '1 day'::interval)::date))");
 	until($date->month != $month) {
-		$sth->execute($account_id, $date->ymd, $number, $date->ymd);
+		$sth->execute($account_id, $date->ymd, $number, $date->ymd, $date->ymd);
 		my $sim = $sth->fetchrow_hashref;
 		if($sim && $sth->fetchrow_hashref) {
 			die "Could not invoice data CDR: it belongs to multiple SIMs\n";
