@@ -125,7 +125,7 @@ sub get_database_handle {
 		$db->{'dsn'} = $dbn;
 	}
 	my $connect_method = $allow_cached ? \&DBI::connect_cached : \&DBI::connect;
-	my $dbh = $connect_method->("DBI", $db->{'dsn'}, $db->{'username'} || '', $db->{'password'} || '', {AutoCommit => 1, RaiseError => 1, PrintError => 0});
+	my $dbh = $connect_method->("DBI", $db->{'dsn'}, $db->{'username'} || '', $db->{'password'} || '', {AutoCommit => 1, RaiseError => 1, PrintError => 0, pg_enable_utf8 => 1});
 	if(!$dbh) {
 		die $DBI::errstr;
 	} else {

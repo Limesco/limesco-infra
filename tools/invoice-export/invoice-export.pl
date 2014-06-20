@@ -8,6 +8,8 @@ use Limesco;
 use Text::Template;
 use File::Temp qw(tempdir);
 use IPC::Run qw(run);
+use v5.14; # Unicode string features
+use open qw( :encoding(UTF-8) :std);
 
 =head1 invoice-export.pl
 
@@ -51,8 +53,10 @@ if(!caller) {
 	my $invoice = get_invoice($lim, $invoice_id);
 
 	my $content;
+	my $raw_content = 0;
 	if($filename =~ /\.pdf$/) {
 		$content = generate_pdf($lim, $invoice, $template);
+		$raw_content = 1;
 	} elsif($filename =~ /\.tex$/) {
 		$content = generate_tex($lim, $invoice, $template);
 	} else {
@@ -60,6 +64,7 @@ if(!caller) {
 	}
 
 	open my $fh, '>', $filename or die $!;
+	binmode $fh if $raw_content;
 	print $fh $content;
 	close $fh;
 }
@@ -181,6 +186,7 @@ sub generate_pdf {
 
 	my $pdffile = '';
 	open $fh, '<', "$dir/file.pdf" or die $!;
+	binmode $fh;
 	while(<$fh>) {
 		$pdffile .= $_;
 	}
