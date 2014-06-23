@@ -24,15 +24,55 @@ use Term::Shell;
 use Try::Tiny;
 use base qw(Term::Shell);
 
+sub today {
+	my @time = localtime(time);
+	return sprintf("%04d-%02d-%02d", $time[5] + 1900, $time[4] + 1, $time[3]);
+}
+
+# ask_question($question, sub ...) = ask question, feed answers through subroutine
+# subroutine can return undef to try again, the given value to accept it, or
+# another value that will be returned by ask_question()
+# ask_question($question) = ask question, return any answer, including empty
+sub ask_question {
+	my ($question, $validator) = @_;
+	while(1) {
+		print "$question ";
+		my $answer = <STDIN>;
+		1 while chomp $answer;
+		if($validator) {
+			my $validated = $validator->($answer);
+			return $validated if defined $validated;
+		} else {
+			return $answer;
+		}
+	}
+}
+
+# ask_date_or_today($question) = ask question, give today's date as suggestion;
+# return the date the user gave or today's date if the user answered nothing
+sub ask_date_or_today {
+	my ($question) = @_;
+	my $today = today();
+	return ask_question("$question [$today]", sub {
+		if(length $_[0]) {
+			if($_[0] =~ /\d{4}-\d\d-\d\d/) {
+				return $_[0];
+			} else {
+				warn "That's not a valid date!\n";
+				return;
+			}
+		} else {
+			return $today;
+		}
+	});
+}
+
 sub init {
 	my ($self) = @_;
 	$self->{lim} = $self->{API}{args}[0];
 	if(!$self->{lim} || ref($self->{lim}) ne "Limesco") {
 		croak "Failed to create LimescoShell: Limesco object must be given as the first parameter";
 	}
-
-	delete $self->{account};
-	delete $self->{sim};
 }
 
 sub prompt_str {
@@ -160,4 +200,109 @@ HELP
 
 sub smry_back {
 	return "go back to the previous level";
+}
+
+sub cli_create_account {
+	my ($self) = @_;
+	local $SIG{INT} = sub { die "Interrupted\n" };
+	my $starting_date = ask_date_or_today("Starting date?");
+
+	my $account = {};
+	$account->{'first_name'} = ask_question("First name?");
+	$account->{'last_name'} = ask_question("Last name?");
+	$account->{'company_name'} = ask_question("Company name?") || undef;
+	$account->{'street_address'} = ask_question("Street address?");
+	$account->{'postal_code'} = ask_question("Postal code?");
+	$account->{'city'} = ask_question("City?");
+	$account->{'email'} = ask_question("E-mail address?");
+	return ::create_account($self->{'lim'}, $account, $starting_date);
+}
+
+sub cli_create_sim {
+	my ($self) = @_;
+	local $SIG{INT} = sub { die "Interrupted\n" };
+	my $starting_date = ask_date_or_today("Starting date?");
+
+	my $stock_sim;
+	my $iccid = ask_question("ICCID?", sub {
+		my $iccid = $_[0];
+		try {
+			$stock_sim = ::get_sim($self->{'lim'}, $iccid, $starting_date);
+			if($stock_sim->{'state'} ne "STOCK") {
+				warn "That ICCID is already taken: it belongs to a non-STOCK SIM at $starting_date.\n";
+				undef $stock_sim;
+				return undef;
+			}
+			return $iccid;
+		} catch {
+			warn "Couldn't retrieve that stock SIM: $_";
+			warn "Assuming we will create it as a new SIM\n";
+			return $iccid;
+		};
+	});
+
+	my $sim = {iccid => $iccid};
+	if($stock_sim) {
+		$sim->{'puk'} = $stock_sim->{'puk'};
+	} else {
+		$sim->{'puk'} = ask_question("PUK?");
+	}
+	$sim->{'owner_account_id'} = $self->{'account'}{'id'};
+	# all of our SIMs have APN_NODATA currently
+	$sim->{'data_type'} = "APN_NODATA";
+	$sim->{'state'} = "ACTIVATED";
+	$sim->{'exempt_from_cost_contribution'} = 0;
+	$sim->{'porting_state'} = ask_question("Will a number be ported immediately? (y/n)", sub {
+		if(lc($_[0]) eq "y") {
+			return "WILL_PORT";
+		} elsif(lc($_[0]) eq "n") {
+			return "NO_PORT";
+		} else {
+			warn "Invalid response: make it 'y' or 'n'.\n";
+			return;
+		}
+	});
+	$sim->{'call_connectivity_type'} = ask_question("DIY or OOTB?", sub {
+		if(uc($_[0]) eq "DIY") {
+			return "DIY";
+		} elsif(uc($_[0]) eq "OOTB") {
+			return "OOTB";
+		} else {
+			warn "Invalid response: make it 'DIY' or 'OOTB'.\n";
+			return;
+		}
+	});
+	return ::create_sim($self->{'lim'}, $sim, $starting_date);
+}
+
+sub run_create {
+	my ($self) = @_;
+	if(!$self->{account}) {
+		try {
+			$self->{account} = cli_create_account($self);
+		} catch {
+			warn $_;
+		};
+	} elsif(!$self->{sim}) {
+		try {
+			$self->{sim} = cli_create_sim($self);
+		} catch {
+			warn $_;
+		};
+	} else {
+		warn "Cannot create anything in SIM mode. Use 'back' to go back.";
+	}
+}
+
+sub help_create {
+	return <<HELP;
+create
+
+In main mode, create an account. In account mode, create a SIM. Otherwise, give
+an error.
+HELP
+}
+
+sub smry_create {
+	return "create an account/SIM";
 }
