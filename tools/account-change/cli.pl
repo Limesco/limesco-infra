@@ -137,3 +137,27 @@ HELP
 sub smry_sim {
 	return "selects a SIM";
 }
+
+sub run_back {
+	my ($self) = @_;
+	if($self->{account}) {
+		if($self->{sim}) {
+			delete $self->{sim};
+		} else {
+			delete $self->{account};
+		}
+	}
+}
+
+sub help_back {
+	return <<HELP;
+back
+
+Go back to the previous level. If a SIM is selected, go back to account. If an
+account is selected, go back to main menu.
+HELP
+}
+
+sub smry_back {
+	return "go back to the previous level";
+}
