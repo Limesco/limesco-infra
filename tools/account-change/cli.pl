@@ -306,3 +306,93 @@ HELP
 sub smry_create {
 	return "create an account/SIM";
 }
+
+sub cli_account_oneliner {
+	my ($account) = @_;
+	if($account->{'company_name'}) {
+		my $company = $account->{'company_name'};
+		delete $account->{'company_name'};
+		return $company . " (" . cli_account_oneliner($account) . ")";
+	} else {
+		return $account->{'first_name'} . " " . $account->{'last_name'};
+	}
+}
+
+sub run_info {
+	my ($self, $what) = @_;
+	$what = lc($what) if $what;
+	if($what && $what eq "sim" && !$self->{sim}) {
+		warn "Can't give info about SIM: no SIM selected (use 'sim' first)\n";
+		return;
+	} elsif($what && $what eq "account" && !$self->{account}) {
+		warn "Can't give info about account: no account selected (use 'account' first)\n";
+		return;
+	} elsif(!$what) {
+		$what = "account" if($self->{'account'});
+		$what = "sim" if($self->{'sim'});
+		if(!$what) {
+			print "Info about what? Select an account or SIM first.\n";
+			return;
+		}
+	}
+
+	if($what eq "sim") {
+		my $s = $self->{sim};
+		print "ICCID: " . $s->{'iccid'} . "\n";
+		print "Current information validity period: " . $s->{'period'} . "\n";
+		print "SIM State: " . $s->{'state'} . "\n";
+		print "PUK: " . $s->{'puk'} . "\n";
+		die if $s->{'owner_account_id'} != $self->{'account'}{'id'};
+		print "Owner: " . cli_account_oneliner($self->{'account'}) . "\n";
+		print "Data type: " . $s->{'data_type'} . "\n";
+		print "Exempt from cost contribution: " . $s->{'exempt_from_cost_contribution'} . "\n";
+		print "Porting state: " . $s->{'porting_state'} . "\n";
+		print "Call connectivity type: " . $s->{'call_connectivity_type'} . "\n";
+		print "\n";
+		my $activation = $s->{'activation_invoice_id'};
+		if($activation) {
+			print "Activation invoiced at: $activation\n";
+		} else {
+			print "Activation not invoiced yet\n";
+		}
+		my $last_invoice = $s->{'last_monthly_fees_invoice_id'};
+		if($last_invoice) {
+			print "Last invoiced at: $last_invoice (for " . $s->{'last_monthly_fees_month'} . ")\n";
+		}
+	} elsif($what eq "account") {
+		my $a = $self->{'account'};
+		print "Account ID: " . $a->{'id'} . "\n";
+		print "Current information validity period: " . $a->{'period'} . "\n";
+		print "Company name: " . ($a->{'company_name'} || "(none)") . "\n";
+		print "First name: " . $a->{'first_name'} . "\n";
+		print "Last name: " . $a->{'last_name'} . "\n";
+		print "E-mail address: " . $a->{'email'} . "\n";
+		print "Address:\n";
+		print "  " . $a->{'street_address'} . "\n";
+		print "  " . $a->{'postal_code'} . " " . $a->{'city'} . "\n";
+	}
+}
+
+sub help_info {
+	return <<HELP;
+info [sim|account]
+
+Give information about the currently selected SIM or account.
+HELP
+}
+
+sub smry_info {
+	return "give information about currently selected object";
+}
+
+sub run_ls {
+	return run_info(@_);
+}
+
+sub help_ls {
+	return help_info();
+}
+
+sub smry_ls {
+	return smry_info();
+}
