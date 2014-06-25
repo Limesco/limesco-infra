@@ -74,6 +74,32 @@ if(!caller) {
 
 =head2 Methods
 
+=head3 list_invoices($lim, $account_id)
+
+Return a list of all invoices for a given account ID.
+
+=cut
+
+sub list_invoices {
+	my ($lim, $account_id) = @_;
+	my $dbh = $lim->get_database_handle();
+	my $sth = $dbh->prepare("SELECT * FROM invoice WHERE account_id=? ORDER BY id ASC");
+	$sth->execute($account_id);
+	my @invoices;
+	while(my $invoice = $sth->fetchrow_hashref) {
+		push @invoices, $invoice;
+	}
+	$sth = $dbh->prepare("SELECT * FROM invoice_itemline WHERE invoice_id=?");
+	foreach my $invoice (@invoices) {
+		$sth->execute($invoice->{'id'});
+		$invoice->{'item_lines'} = [];
+		while(my $row = $sth->fetchrow_hashref) {
+			push @{$invoice->{'item_lines'}}, $row;
+		}
+	}
+	return @invoices;
+}
+
 =head3 get_invoice($lim, $invoice_id)
 
 Retrieve information about invoice $invoice_id.

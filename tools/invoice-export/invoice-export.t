@@ -12,7 +12,7 @@ use Try::Tiny;
 use File::Temp qw(tempdir);
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 31;
+plan tests => 33;
 
 require_ok("invoice-export.pl");
 
@@ -29,10 +29,13 @@ $dbh->do("INSERT INTO account (id, period, first_name, last_name,
 	'test\@test.org');");
 
 my $account_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "account_id_seq"});
+
+is_deeply([list_invoices($lim, $account_id)], [], "No invoices for account");
+
 my $invoice_id = '14C000001';
 
-$dbh->do("INSERT INTO invoice (id, account_id, date, rounded_without_taxes,
-	rounded_with_taxes) VALUES (?, ?, '2014-01-01', '10.61',
+$dbh->do("INSERT INTO invoice (id, account_id, date, creation_time, rounded_without_taxes,
+	rounded_with_taxes) VALUES (?, ?, '2014-01-01', '2014-01-01 05:06:07', '10.61',
 	'13.37');", undef, $invoice_id, $account_id);
 
 my $sth = $dbh->prepare("INSERT INTO invoice_itemline (type, invoice_id, description, taxrate,
@@ -41,6 +44,32 @@ my $sth = $dbh->prepare("INSERT INTO invoice_itemline (type, invoice_id, descrip
 
 $sth->execute('NORMAL', $invoice_id, 'Invoice Itemline Description', 0.26,
 	13.37, undef, 10.61, 1, undef, undef, undef, undef);
+
+is_deeply([list_invoices($lim, $account_id)], [{
+	id => $invoice_id,
+	account_id => $account_id,
+	date => '2014-01-01',
+	currency => 'EUR',
+	creation_time => '2014-01-01 05:06:07',
+	rounded_without_taxes => 10.61,
+	rounded_with_taxes => 13.37,
+	item_lines => [{
+		id => 1,
+		type => 'NORMAL',
+		invoice_id => $invoice_id,
+		queued_for_account_id => undef,
+		description => 'Invoice Itemline Description',
+		taxrate => '0.26000000',
+		rounded_total => 13.37,
+		base_amount => undef,
+		item_price => '10.61000000',
+		item_count => 1,
+		number_of_calls => undef,
+		number_of_seconds => undef,
+		price_per_call => undef,
+		price_per_minute => undef,
+	}],
+}], "One invoice for account");
 
 my $dir = tempdir(CLEANUP => 1);
 my $template_name = "$dir/template.tex";
