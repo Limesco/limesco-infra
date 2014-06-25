@@ -8,6 +8,7 @@ use Limesco;
 
 do 'account-change.pl';
 do '../sim-change/sim-change.pl';
+do '../invoice-export/invoice-export.pl';
 
 my $lim = Limesco->new_from_args(\@ARGV);
 my $shell = LimescoShell->new($lim);
@@ -395,4 +396,75 @@ sub help_ls {
 
 sub smry_ls {
 	return smry_info();
+}
+
+sub run_invoice {
+	my ($self, $invoice_id) = @_;
+	if(!$invoice_id && !$self->{'account'}) {
+		warn "Select an account to list its invoices, or give an invoice ID to dump its information.\n";
+		return;
+	} elsif(!$invoice_id) {
+		my @invoices = ::list_invoices($lim, $self->{'account'}{'id'});
+		if(!@invoices) {
+			print "This account was never invoiced.\n";
+			return;
+		}
+		foreach my $invoice (@invoices) {
+			printf("%s (%s): %.02f\n", $invoice->{'id'}, $invoice->{'date'}, $invoice->{'rounded_with_taxes'});
+		}
+		return;
+	} else {
+		my $invoice;
+		try {
+			$invoice = ::get_invoice($lim, $invoice_id);
+			die if(!$invoice);
+		} catch {
+			warn "Could not retrieve this invoice: $_\n";
+			return;
+		};
+		if($self->{'account'} && $invoice->{'account_id'} != $self->{'account'}{'id'}) {
+			warn "Refusing to list this invoice: it does not belong to the selected account.\n";
+			warn "Deselect the current account using 'back' to list this invoice.\n";
+			return;
+		}
+		printf("Invoice ID: %s\n", $invoice->{'id'});
+		printf("Account: %s\n", cli_account_oneliner(::get_account($lim, $invoice->{'account_id'})));
+		printf("Invoice date: %s\n", $invoice->{'date'});
+		printf("Invoice creation time: %s\n", $invoice->{'creation_time'});
+		printf("----------------------------------------------------------\n");
+		foreach my $line (@{$invoice->{'item_lines'}}) {
+			next if($line->{'type'} eq "TAX");
+			# Note: Description may be multi-line
+			printf("%s\n", $line->{'description'});
+			if($line->{'type'} eq "NORMAL") {
+				printf("    %d * %.4f = %.2f\n", $line->{'item_count'}, $line->{'item_price'}, $line->{'rounded_total'});
+			} elsif($line->{'type'} eq "DURATION") {
+				printf("    %d calls * %.4f ppc\n", $line->{'number_of_calls'}, $line->{'price_per_call'});
+				printf("    %d minutes * %.4f ppm\n", $line->{'number_of_seconds'} / 60, $line->{'price_per_minute'});
+				printf("    ----------------------+ = %.2f\n", $line->{'rounded_total'});
+			} else {
+				die "Unknown itemline type\n";
+			}
+		}
+		printf("----------------------------------------------------------\n");
+		printf("Total without taxes: %.2f\n", $invoice->{'rounded_without_taxes'});
+		foreach my $line (@{$invoice->{'item_lines'}}) {
+			next if($line->{'type'} ne "TAX");
+			printf("%.2f%% taxes over %.2f: %.2f\n", $line->{'taxrate'} * 100, $line->{'base_amount'}, $line->{'rounded_total'});
+		}
+		printf("Total with taxes: %.2f\n", $invoice->{'rounded_with_taxes'});
+	}
+}
+
+sub help_invoice {
+	return <<HELP;
+invoice [invoiceid]
+
+List information about given invoice. If no invoice name is given, give
+a list of invoices for the selected account if there is one.
+HELP
+}
+
+sub smry_invoice {
+	return "dump an invoice or a list of invoices";
 }
