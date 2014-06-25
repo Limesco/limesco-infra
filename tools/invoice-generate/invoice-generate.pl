@@ -364,9 +364,8 @@ sub generate_invoice {
 		my $invoice_id = find_next_invoice_id($dbh, $date);
 
 		# Add activation costs for all unactivated SIMs
-		# TODO: only for SIMs created after today
-		my $sth = $dbh->prepare("SELECT * FROM sim WHERE owner_account_id=? AND activation_invoice_id IS NULL AND state != 'DISABLED'");
-		$sth->execute($account_id);
+		my $sth = $dbh->prepare("SELECT * FROM sim WHERE owner_account_id=? AND activation_invoice_id IS NULL AND state != 'DISABLED' AND period @> ?::date");
+		$sth->execute($account_id, $date);
 		while(my $sim = $sth->fetchrow_hashref) {
 			# TODO: this calls die() when $date is already a 'history record' (i.e. there
 			# is a planned update for this SIM after $date); this can be made more robust
