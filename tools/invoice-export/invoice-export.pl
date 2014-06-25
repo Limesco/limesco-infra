@@ -11,6 +11,9 @@ use IPC::Run qw(run);
 use v5.14; # Unicode string features
 use open qw( :encoding(UTF-8) :std);
 
+# get_account
+do '../account-change/account-change.pl' unless UNIVERSAL::can('main', "get_account");
+
 =head1 invoice-export.pl
 
 Usage: invoice-export.pl [infra-options] [--template <textemplate>] --write-invoice <num> --write-to <filename>
@@ -90,20 +93,6 @@ sub get_invoice {
 		push @{$invoice->{'item_lines'}}, $row;
 	}
 	return $invoice;
-}
-
-=head3 get_account($lim, $account_id)
-
-Retrieve current information about account $account_id.
-
-=cut
-
-sub get_account {
-	my ($lim, $account_id) = @_;
-	my $dbh = $lim->get_database_handle();
-	my $sth = $dbh->prepare("SELECT * FROM account WHERE id=? AND period && '[today,today]';");
-	$sth->execute($account_id);
-	return $sth->fetchrow_hashref() or die "Account doesn't exist: '$account_id'\n";
 }
 
 =head3 generate_tex($lim, $invoice, $template)
