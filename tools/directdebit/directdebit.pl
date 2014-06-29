@@ -494,17 +494,14 @@ sub export_directdebit_file {
 		my ($invoice_id) = @_;
 		my $sth = $dbh->prepare("SELECT item_count, item_price FROM invoice_itemline WHERE invoice_id=? AND item_price > 30 AND description LIKE 'Activatie SIM-kaart'");
 		$sth->execute($invoice_id);
-		my $line = $sth->fetchrow_arrayref();
-		if($line && $sth->fetchrow_arrayref) {
-			die "More than one activation on invoice $invoice_id";
+		my $number_of_activations = 0;
+		while(my $line = $sth->fetchrow_arrayref()) {
+			if($line->[0] != 1 || $line->[1] != 34.7107) {
+				die "Activation price or count is off on invoice $invoice_id";
+			}
+			$number_of_activations += $line->[0];
 		}
-		if($line && $line->[1] != 34.7107) {
-			die "Activation price is off on invoice $invoice_id";
-		}
-		my $subtract = 0;
-		if($line) {
-			$subtract = $line->[0] * 42;
-		}
+		my $subtract = $number_of_activations * 42;
 		$sth = $dbh->prepare("SELECT rounded_with_taxes FROM invoice WHERE id=?");
 		$sth->execute($invoice_id);
 		my $invoice = $sth->fetchrow_arrayref();
