@@ -75,24 +75,24 @@ my $dir = tempdir(CLEANUP => 1);
 my $template_name = "$dir/template.tex";
 open my $fh, '>', $template_name or die $!;
 print $fh <<'EOF';
-ID: \beginperl $invoice->{'id'} \endperl
-Account ID: \beginperl $invoice->{'account_id'} \endperl
-Date: \beginperl $invoice->{'date'} \endperl
-Rounded without taxes: \beginperl $invoice->{'rounded_without_taxes'} \endperl
-Rounded with taxes: \beginperl $invoice->{'rounded_with_taxes'} \endperl
+ID: \beginperl $invoice{'id'} \endperl
+Account ID: \beginperl $invoice{'account_id'} \endperl
+Date: \beginperl $invoice{'date'} \endperl
+Rounded without taxes: \beginperl $invoice{'rounded_without_taxes'} \endperl
+Rounded with taxes: \beginperl $invoice{'rounded_with_taxes'} \endperl
 
-Account ID: \beginperl $account->{'id'} \endperl
-Account firstname: \beginperl $account->{'first_name'} \endperl
-Account lastname: \beginperl $account->{'last_name'} \endperl
-Account streetaddress: \beginperl $account->{'street_address'} \endperl
-Account postalcode: \beginperl $account->{'postal_code'} \endperl
-Account city: \beginperl $account->{'city'} \endperl
-Account email: \beginperl $account->{'email'} \endperl
+Account ID: \beginperl $account{'id'} \endperl
+Account firstname: \beginperl $account{'first_name'} \endperl
+Account lastname: \beginperl $account{'last_name'} \endperl
+Account streetaddress: \beginperl $account{'street_address'} \endperl
+Account postalcode: \beginperl $account{'postal_code'} \endperl
+Account city: \beginperl $account{'city'} \endperl
+Account email: \beginperl $account{'email'} \endperl
 
 \beginperl
 	my $i = 0;
 
-	foreach my $itemline (@{$invoice->{'item_lines'}}) {
+	foreach my $itemline (@{$invoice{'item_lines'}}) {
 		$i++;
 		$OUT .= "Itemline $i\n";
 		$OUT .= "Type: " . $itemline->{'type'} . "\n";
@@ -114,7 +114,7 @@ EOF
 close $fh;
 
 my $invoice = get_invoice($lim, $invoice_id);
-my $input_tex = generate_tex($lim, $invoice, $template_name);
+my $input_tex = generate_invoice_tex($lim, $invoice, $template_name);
 
 my @lines = (
 	"ID: $invoice_id",

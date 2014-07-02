@@ -1,0 +1,70 @@
+\documentclass[a4paper,11pt]{memoir}
+
+\usepackage{fullpage}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{parskip}
+\usepackage{wrapfig}
+
+\setlength{\parskip}{11pt}
+\setlength{\parindent}{0pt}
+
+\makepagestyle{welkomstbrief}
+\makeevenfoot{welkomstbrief}{}{}{}
+\makeoddfoot{welkomstbrief}{}{}{}
+
+\begin{document}
+\pagestyle{welkomstbrief}
+
+\begin{minipage}{\linewidth}
+    \noindent \begin{minipage}{0.60\linewidth}
+    \vspace{3cm}
+    \beginperl $account{'first_name'} . " " . $account{'last_name'} \endperl \\
+    \beginperl $account{'street_address'} \endperl \\
+    \beginperl $account{'postal_code'} . " " . $account{'city'} \endperl \\
+    Nederland
+    \vspace{2cm}
+
+    Datum: \beginperl formatDate($date) \endperl \\
+    Betreft: SIM-kaart
+    \end{minipage}
+    \hspace{0.10\linewidth}
+    \begin{minipage}{0.30\linewidth}
+        \begin{flushright}
+        \includegraphics[width=5cm]{\beginperl $pwd . '/limesco-logo.pdf' \endperl}
+        \end{flushright}
+        Sophiaweg 34 \\
+        6523NJ Nijmegen \\
+        \texttt{support@limesco.nl} \\
+        \texttt{info@limesco.nl} \\
+        \texttt{limesco.nl}
+    \end{minipage}
+\end{minipage}
+
+\section*{}
+
+Hallo \beginperl $account{'first_name'} \endperl,
+
+Bij deze brief vind je je SIM-kaart; deze is reeds geactiveerd of dit gebeurt zeer binnenkort.
+Als je een portering hebt aangevraagd loopt het proces daarvan nu ook; je SIM
+heeft dan een tijdelijk nummer zodat je meteen al kan bellen, sms'en en internetten met Limesco.
+
+Bewaar de SIM-kaart en de gegevens die op het plastic staan goed. Het nummer
+van de SIM-kaart (\texttt{\beginperl $sim{'iccid'} \endperl}) kun je nodig hebben voor administratieve
+handelingen zoals porteringen; de PUK-code (\texttt{\beginperl $sim{'puk'} \endperl}) heb je nodig
+wanneer je per ongeluk de SIM-kaart blokkeert door een aantal keer een foute
+PIN-code in te vullen.
+
+Denk eraan om internet in te stellen op je telefoon als je dit wilt gebruiken. Hoe dit moet kan je lezen op https://secure.limesco.nl/wiki/Telefooninstellingen.
+
+Als je naar aanleiding van deze brief nog vragen of suggesties hebt, kun je ze
+het beste sturen naar \texttt{support@limesco.nl}, of kom langs op IRC-netwerk
+OFTC, ons kanaal is \#limesco.
+
+Met vriendelijke groet,
+
+Gerdriaan, Sjors en Peter
+
+Directie Limesco
+\end{document}

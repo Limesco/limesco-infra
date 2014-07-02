@@ -1,0 +1,64 @@
+\documentclass[a4paper,11pt]{memoir}
+
+\usepackage{fullpage}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+
+\makepagestyle{machtiging}
+\makeevenfoot{machtiging}{}{}{}
+\makeoddfoot{machtiging}{}{}{}
+
+\begin{document}
+\pagestyle{machtiging}
+
+\section*{Doorlopende machtiging SEPA}
+
+\begin{wrapfigure}[0]{r}{4cm}
+\vspace{-0.5\linewidth}
+\includegraphics[width=6cm]{\beginperl $pwd . '/limesco-logo.pdf' \endperl}
+\vfill
+\end{wrapfigure}
+
+\subsection*{Gegevens incassant}
+\begin{itemize}[leftmargin=0pt,label={},itemsep=-4pt]
+\item Limesco B.V.
+\item Sophiaweg 34
+\item 6523NJ Nijmegen
+\item Nederland
+\item{}
+\item Incassant-id: \texttt{NL16LIM552587780000}
+\end{itemize}
+
+\subsection*{Gegevens gebruiker}
+\begin{itemize}[leftmargin=0pt,label={},itemsep=-4pt]
+\item Naam: \mbox{\beginperl $account{'first_name'} . " " . $account{'last_name'} \endperl}
+\item Straat + huisnummer: \mbox{\beginperl $account{'street_address'} \endperl}
+\item Postcode + plaats: \mbox{\beginperl $account{'postal_code'} . " " . $account{'city'} \endperl}
+\item Land: Nederland
+\item Kenmerk machtiging: \texttt{\beginperl $authorization \endperl}
+\end{itemize}
+
+\begin{itemize}[label={},leftmargin=0pt]
+\item Rekeningnummer (IBAN): \dotfill
+\item Bankidentificatie (BIC): \dotfill
+\item Plaats + datum: \dotfill
+\item Handtekening:
+\end{itemize}
+
+\vspace{20mm}
+
+Door ondertekening van dit formulier geef je toestemming aan Limesco om
+doorlopende incasso-opdrachten naar je bank te sturen om de maandelijkse
+abonnementskosten van je rekening af te schrijven en toestemming aan je bank om
+doorlopend een bedrag van je rekening af te schrijven overeenkomstig de opdracht
+van Limesco.
+
+\vspace{10pt}
+
+Als je het niet eens bent met deze afschrijving kan je deze laten terugboeken.
+Neem hiervoor binnen acht weken na afschrijving contact op met je bank. Vraag je
+bank naar de voorwaarden.
+
+\end{document}

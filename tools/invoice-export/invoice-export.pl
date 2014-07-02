@@ -13,6 +13,7 @@ use open qw( :encoding(UTF-8) :std);
 
 # get_account
 do '../account-change/account-change.pl' unless UNIVERSAL::can('main', "get_account");
+do '../letter-generate/letter-generate.pl' unless UNIVERSAL::can('main', "generate_tex");
 
 =head1 invoice-export.pl
 
@@ -58,10 +59,10 @@ if(!caller) {
 	my $content;
 	my $raw_content = 0;
 	if($filename =~ /\.pdf$/) {
-		$content = generate_pdf($lim, $invoice, $template);
+		$content = generate_invoice_pdf($lim, $invoice, $template);
 		$raw_content = 1;
 	} elsif($filename =~ /\.tex$/) {
-		$content = generate_tex($lim, $invoice, $template);
+		$content = generate_invoice_tex($lim, $invoice, $template);
 	} else {
 		die "Didn't understand extension for filename, can't generate output format.\n";
 	}
@@ -121,92 +122,36 @@ sub get_invoice {
 	return $invoice;
 }
 
-=head3 generate_tex($lim, $invoice, $template)
+=head3 generate_invoice_tex($lim, $invoice, $template)
 
 Generate a .tex file using invoice information and a TeX template filename.
 
 =cut
 
-sub generate_tex {
+sub generate_invoice_tex {
 	my ($lim, $invoice, $template) = @_;
-	my $t = Text::Template->new(
-		# 'vars' adds the 'Variable "$invoice" is not imported' error
-		# which I don't know how to work around.
-		PREPEND => q{use strict; no strict 'vars'; use locale; use POSIX qw(locale_h); setlocale(LC_ALL, "nl_NL"); },
-		TYPE => 'FILE',
-		SOURCE => $template,
-		DELIMITERS => ['\\beginperl', '\\endperl'],
-	);
-	no warnings 'once';
-	package T {};
-	$T::invoice = $invoice;
-	$T::lim = $lim;
-	$T::account = get_account($lim, $invoice->{'account_id'});
-	sub T::formatPrice {
-		return $_[0] . $_[1];
-	}
-	sub T::formatDate {
-		if($_[0] =~ /^(20\d\d)-(\d\d)-(\d\d)$/) {
-			my ($year, $month, $day) = ($1, $2, $3);
-			$month = qw(null januari februari maart april mei juni juli augustus september oktober november december)[$month];
-			return "$day $month $year";
-		}
-		die "Unknown date format: " . $_[0] . "\n";
-	}
-	my $tex = $t->fill_in(PACKAGE => 'T');
-	if(!defined($tex)) {
-		die "Failed to generate TeX template: $Text::Template::ERROR\n";
-	}
-	return $tex;
+	my $account = get_account($lim, $invoice->{'account_id'});
+	my $objects = {
+		invoice => $invoice,
+		account => $account,
+	};
+	return generate_tex($lim, $objects, $template);
 }
 
-=head3 generate_pdf($lim, $invoice, $filename)
+=head3 generate_invoice_pdf($lim, $invoice, $filename)
 
 Generate a .pdf file using invoice information and a TeX template filename.
 
 =cut
 
-sub generate_pdf {
+sub generate_invoice_pdf {
 	my ($lim, $invoice, $filename) = @_;
-	my $dir = tempdir(CLEANUP => 1);
-	open my $fh, '>', "$dir/file.tex" or die $!;
-	my $input_tex = generate_tex($lim, $invoice, $filename);
-	print $fh $input_tex;
-	close $fh;
-
-	my $pdflatex_output = '';
-	run(
-		["pdflatex", "-halt-on-error", "-interaction=batchmode", "file.tex"],
-		'>', \$pdflatex_output,
-		'2>', \$pdflatex_output,
-		init => sub {chdir($dir)},
-	);
-	my $child_status = $?;
-
-	if(-f "$dir/file.log" && open $fh, '<', "$dir/file.log") {
-		$pdflatex_output = '';
-		$pdflatex_output .= $_ while(<$fh>);
-		close $fh;
-	}
-
-	if($child_status != 0) {
-		die "pdflatex failed to run (exit code $child_status). "
-			."Log follows:\n$pdflatex_output\nTeX follows:\n$input_tex\npdflatex failed to run (exit code $child_status)\n";
-	}
-
-	if(!-f "$dir/file.pdf") {
-		die "pdflatex exited but did not create a pdf file. "
-			."Log follows:\n$pdflatex_output\nTeX follows:\n$input_tex\npdflatex exited but did not create a pdf file.\n";
-	}
-
-	my $pdffile = '';
-	open $fh, '<', "$dir/file.pdf" or die $!;
-	binmode $fh;
-	while(<$fh>) {
-		$pdffile .= $_;
-	}
-	close $fh;
-	return $pdffile;
+	my $account = get_account($lim, $invoice->{'account_id'});
+	my $objects = {
+		invoice => $invoice,
+		account => $account,
+	};
+	return generate_pdf($lim, $objects, $filename);
 }
 
 1;
