@@ -6,8 +6,9 @@ use lib '../lib';
 use lib '../../lib';
 use Limesco;
 use Text::Template;
-use File::Temp qw(tempdir);
+use File::Temp qw(tempfile tempdir);
 use IPC::Run qw(run);
+use Try::Tiny;
 use v5.14; # Unicode string features
 use open qw( :encoding(UTF-8) :std);
 
@@ -17,12 +18,17 @@ do '../letter-generate/letter-generate.pl' unless UNIVERSAL::can('main', "genera
 
 =head1 invoice-export.pl
 
-Usage: invoice-export.pl [infra-options] [--template <textemplate>] --invoice <num> --write-to <filename>
+Usage:
+1. invoice-export.pl [infra-options] --invoice <num> [--template <textemplate>] --write-to <filename>
+2. invoice-export.pl [infra-options] --invoice <num> [--template <textemplate>] --open
 
-This tool can be used to export PDF or Tex templates for an invoice, using
-the file given using --template or 'invoice-template.tex' by default. It will
-write factoid <num> (e.g. 13C000144) to <filename>, which can be a pdf or tex
-file.
+This tool can be used to export PDF or Tex templates for an invoice, using the
+file given using --template or 'invoice-template.tex' by default.
+
+There are various export options:
+
+1. It can write the invoice to <filename>, which can be a pdf or tex file.
+2. It can write the invoice to a temporary location and open it.
 
 =cut
 
@@ -30,6 +36,7 @@ if(!caller) {
 	my $template = "invoice-template.tex";
 	my $invoice_id;
 	my $filename;
+	my $open;
 	my $lim = Limesco->new_from_args(\@ARGV, sub {
 		my ($args, $iref) = @_;
 		my $arg = $args->[$$iref];
@@ -39,6 +46,8 @@ if(!caller) {
 			$filename = $args->[++$$iref];
 		} elsif($arg eq "--template") {
 			$template = $args->[++$$iref];
+		} elsif($arg eq "--open") {
+			$open = 1;
 		} else {
 			return 0;
 		}
@@ -47,30 +56,48 @@ if(!caller) {
 	if(!$invoice_id) {
 		die "--invoice option is required\n";
 	}
-	if(!$filename) {
-		die "--write-to option is required\n";
+	if(!$filename && !$open) {
+		die "One of --write-to or --open options is required\n";
 	}
 	if(! -f $template) {
 		die "Failed to open template '$template': it doesn't exist\n";
 	}
 
 	my $invoice = get_invoice($lim, $invoice_id);
+	my $pdf_content;
 
-	my $content;
-	my $raw_content = 0;
-	if($filename =~ /\.pdf$/) {
-		$content = generate_invoice_pdf($lim, $invoice, $template);
-		$raw_content = 1;
-	} elsif($filename =~ /\.tex$/) {
-		$content = generate_invoice_tex($lim, $invoice, $template);
-	} else {
-		die "Didn't understand extension for filename, can't generate output format.\n";
+	if($filename) {
+		my $content;
+		my $raw_content = 0;
+		if($filename =~ /\.pdf$/) {
+			$pdf_content = $content = generate_invoice_pdf($lim, $invoice, $template);
+			$raw_content = 1;
+		} elsif($filename =~ /\.tex$/) {
+			$content = generate_invoice_tex($lim, $invoice, $template);
+		} else {
+			die "Didn't understand extension for filename, can't generate output format.\n";
+		}
+
+		open my $fh, '>', $filename or die $!;
+		binmode $fh if $raw_content;
+		print $fh $content;
+		close $fh;
 	}
 
-	open my $fh, '>', $filename or die $!;
-	binmode $fh if $raw_content;
-	print $fh $content;
-	close $fh;
+	if($open) {
+		$pdf_content ||= generate_invoice_pdf($lim, $invoice, $template);
+		my ($fh, $filename) = tempfile();
+		binmode $fh;
+		print $fh $pdf_content;
+		close $fh;
+		if(-x "/usr/bin/xdg-open") {
+			system("/usr/bin/xdg-open", $filename);
+		} elsif(-x "/usr/bin/open") {
+			system("/usr/bin/open", $filename);
+		} else {
+			warn "Don't know how to open filenames on this operating system.";
+		}
+	}
 }
 
 =head2 Methods
