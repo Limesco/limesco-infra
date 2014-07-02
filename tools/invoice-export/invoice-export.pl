@@ -17,7 +17,7 @@ do '../letter-generate/letter-generate.pl' unless UNIVERSAL::can('main', "genera
 
 =head1 invoice-export.pl
 
-Usage: invoice-export.pl [infra-options] [--template <textemplate>] --write-invoice <num> --write-to <filename>
+Usage: invoice-export.pl [infra-options] [--template <textemplate>] --invoice <num> --write-to <filename>
 
 This tool can be used to export PDF or Tex templates for an invoice, using
 the file given using --template or 'invoice-template.tex' by default. It will
@@ -33,7 +33,7 @@ if(!caller) {
 	my $lim = Limesco->new_from_args(\@ARGV, sub {
 		my ($args, $iref) = @_;
 		my $arg = $args->[$$iref];
-		if($arg eq "--write-invoice") {
+		if($arg eq "--invoice") {
 			$invoice_id = $args->[++$$iref];
 		} elsif($arg eq "--write-to") {
 			$filename = $args->[++$$iref];
@@ -45,7 +45,7 @@ if(!caller) {
 	});
 
 	if(!$invoice_id) {
-		die "--write-invoice option is required\n";
+		die "--invoice option is required\n";
 	}
 	if(!$filename) {
 		die "--write-to option is required\n";
