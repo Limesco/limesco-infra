@@ -65,9 +65,27 @@ if(!caller) {
 
 =head2 Methods
 
-=head3 get_all_invoices($lim, $date)
+=head3 Generic methods
 
-Retrieve all invoices of $date (or further.
+=head4 get_account($lim, $account_id)
+
+Retrieve current information about account $account_id.
+
+=cut
+
+sub get_account {
+	my ($lim, $account_id) = @_;
+	my $dbh = $lim->get_database_handle();
+	my $sth = $dbh->prepare("SELECT * FROM account WHERE id=? AND period && '[today,today]';");
+	$sth->execute($account_id);
+	return $sth->fetchrow_hashref() or die "Account doesn't exist: '$account_id'\n";
+}
+
+=head3 Invoice related methods
+
+=head4 get_all_invoices($lim, $date)
+
+Retrieve all invoices of the specified date (interval).
 
 =cut
 
@@ -100,27 +118,12 @@ sub get_all_invoices {
 			$row->{full_name} .= " (".$account->{company_name}.")" if $account->{company_name};
 			push @{$invoices}, $row;
 		}
-	} else {
-		print "Empty result set.\n";
 	}
-	return $invoices;
+	return $invoices if ($numresults > 0);
+	return "Empty result set.";
 }
 
-=head3 get_account($lim, $account_id)
-
-Retrieve current information about account $account_id.
-
-=cut
-
-sub get_account {
-	my ($lim, $account_id) = @_;
-	my $dbh = $lim->get_database_handle();
-	my $sth = $dbh->prepare("SELECT * FROM account WHERE id=? AND period && '[today,today]';");
-	$sth->execute($account_id);
-	return $sth->fetchrow_hashref() or die "Account doesn't exist: '$account_id'\n";
-}
-
-=head3 print_table(@invoices, $format)
+=head4 print_invoices(@invoices, $format)
 
 Prints all the requested invoices in the specified format (plain, QIF)
 
@@ -169,3 +172,19 @@ sub print_invoices {
 		}
 	}
 }
+
+=head3 Direct debit related methods
+
+=head4 get_all_directdebit($lim, $date)
+
+Retrieve all direct debit information of the specified $date (interval).
+
+=cut
+
+=head4 print_invoices(@invoices, $format)
+
+Prints all the requested direct debit data in the specified format (plain, QIF)
+
+=cut
+
+1;
