@@ -155,8 +155,15 @@ sub run_sim {
 	# TODO: filter by account ID in list_sims
 	my @sims = grep { $_->{'owner_account_id'} && $_->{'owner_account_id'} eq $accountid } ::list_sims($self->{lim});
 	foreach(@sims) {
-		# TODO: list phonenumbers here
-		printf("%s %s %s\n", $_->{'iccid'}, $_->{'state'}, $_->{'period'});
+		my @phonenumbers = ::list_phonenumbers($lim, $_->{'iccid'});
+		my $phonenumber = "(no phone numbers)" if @phonenumbers == 0;
+		$phonenumber = $phonenumbers[0]{'phonenumber'} if @phonenumbers == 1;
+		$phonenumber = "" if @phonenumbers > 1;
+
+		printf("%s %s %s %s\n", $_->{'iccid'}, $_->{'state'}, $_->{'period'}, $phonenumber);
+		if(@phonenumbers > 1) {
+			printf("  %s\n", $_->{'phonenumber'}) foreach(@phonenumbers);
+		}
 	}
 	if(@sims == 1) {
 		$self->{'sim'} = $sims[0];
@@ -467,4 +474,74 @@ HELP
 
 sub smry_invoice {
 	return "dump an invoice or a list of invoices";
+}
+
+sub run_phonenumber {
+	my ($self, $command, $number, $date) = @_;
+
+	if(!$self->{'sim'}) {
+		warn "Can only use the 'phonenumber' command when a SIM is selected.\n";
+		return;
+	}
+
+	if(!$command) {
+		warn help_phonenumber();
+		return;
+	}
+
+	if($command eq "list") {
+		my $dbh = $self->{lim}->get_database_handle();
+		my $sth = $dbh->prepare("SELECT phonenumber, lower(period) as lower, upper(period) as upper FROM phonenumber WHERE sim_iccid=?");
+		$sth->execute($self->{'sim'}{'iccid'});
+		while(my $row = $sth->fetchrow_hashref()) {
+			my $from = $row->{'lower'} ? sprintf("from %s", $row->{'lower'}) : "";
+			my $to = $row->{'upper'} ? sprintf("until %s", $row->{'upper'}) : "";
+			if(!$row->{'lower'} && !$row->{'upper'}) {
+				$from = "always";
+			}
+			my $space = $from && $to ? " " : "";
+			printf("  %s    (%s%s%s)\n", $row->{'phonenumber'}, $from, $space, $to);
+		}
+	} elsif($command eq "add" || $command eq "remove") {
+		if($number && $date) {
+			# use the given ones
+		} elsif(!$number && !$date) {
+			my $add = $command eq "add" ? "add" : "remove";
+			$number = ask_question("What phone number to $add?");
+			my $activated = $command eq "add" ? "activated" : "deactivated";
+			$date = ask_date_or_today("On what date will the phone number be $activated?");
+		} else {
+			warn help_phonenumber();
+			return;
+		}
+
+		try {
+			if($command eq "add") {
+				::create_phonenumber($lim, $number, $self->{'sim'}{'iccid'}, $date);
+			} else {
+				::delete_phonenumber($lim, $number, $date);
+			}
+		} catch {
+			warn $_;
+		};
+	} else {
+		warn help_phonenumber();
+		return;
+	}
+}
+
+sub help_phonenumber {
+	return <<HELP;
+phonenumber list
+phonenumber add [<number> <date>]
+phonenumber remove [<number> <date>]
+
+List phone numbers, add one to a SIM, or remove one from a SIM. If no
+parameters are given to add or remove, the command asks interactively.
+'today' is allowed as the date.
+HELP
+}
+
+sub smry_phonenumber {
+	return "add or remove phone numbers from SIMs";
 }
