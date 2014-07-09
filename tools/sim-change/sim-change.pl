@@ -180,16 +180,16 @@ sub list_phonenumbers {
 	my ($lim, $arg1, $arg2) = @_;
 	my ($iccid, $date);
 	if($arg1) {
-		if($arg1 =~ /^20\d\d-\d\d-\d\d$/) {
+		if($arg1 =~ /^20\d\d-\d\d-\d\d$/ || $arg1 eq "today") {
 			$date = $arg1;
-		} elsif($arg1 =~ /^89310\d{15}$/) {
+		} elsif($arg1 =~ /^89310\d{13}\d{0,2}$/) {
 			$iccid = $arg1;
 		} else {
 			die "Didn't understand parameter: $arg1\n";
 		}
 	}
 	if($arg2) {
-		if(!$date && $arg2 =~ /^20\d\d-\d\d-\d\d$/) {
+		if(!$date && ($arg2 =~ /^20\d\d-\d\d-\d\d$/ || $arg2 eq "today")) {
 			$date = $arg2;
 		} else {
 			die "Didn't understand parameter: $arg2\n";
