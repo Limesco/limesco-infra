@@ -442,8 +442,8 @@ sub run_invoice {
 			die if(!$invoice);
 		} catch {
 			warn "Could not retrieve this invoice: $_\n";
-			return;
 		};
+		return if(!$invoice);
 		if($self->{'account'} && $invoice->{'account_id'} != $self->{'account'}{'id'}) {
 			warn "Refusing to list this invoice: it does not belong to the selected account.\n";
 			warn "Deselect the current account using 'back' to list this invoice.\n";
