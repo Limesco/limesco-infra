@@ -6,7 +6,7 @@ use lib '../lib';
 use lib '../../lib';
 use Limesco;
 use Data::Dumper;
-use IPC::Run qw(run);
+#use IPC::Run qw(run);
 
 =head1 gnucash-export.pl
 
@@ -59,8 +59,13 @@ if(!caller) {
 		# Append first day of the month
 		$date .= "-01";
 	}
-	my @invoices = get_all_invoices($lim, $date);
-	print_invoices(@invoices, $format);
+	if ($type eq "invoice") {
+		my @invoices = get_all_invoices($lim, $date);
+		print_invoices(@invoices, $format);
+	} else {
+		my @dd = get_all_directdebit($lim, $date);
+		print_directdebit(@dd, $format);
+	}
 }
 
 =head2 Methods
@@ -92,12 +97,9 @@ Retrieve all invoices of the specified date (interval).
 sub get_all_invoices {
 	my ($lim, $date) = @_;
 	my $dbh = $lim->get_database_handle();
-	my $sth;
 	my $query;
 	my $params;
-	my $numresults;
-	my $invoices = [];
-	
+
 	if ($date =~ '^\+') {
 		$date = substr $date, 1;
 		$query = "SELECT * FROM invoice WHERE date >= ?";
@@ -106,10 +108,10 @@ sub get_all_invoices {
 		$query = q(SELECT * FROM invoice WHERE date BETWEEN ? AND (?::date + '1 month'::interval));
 		$params = 2;
 	}
-	print "$query\n";
 
-	$sth = $dbh->prepare($query);
-	$numresults = ($params == 1) ? $sth->execute($date) : $sth->execute($date, $date);
+	my $sth = $dbh->prepare($query);
+	my $numresults = ($params == 1) ? $sth->execute($date) : $sth->execute($date, $date);
+	my $invoices = [];
 
 	if ($numresults > 0) {
 		while (my $row = $sth->fetchrow_hashref()) {
