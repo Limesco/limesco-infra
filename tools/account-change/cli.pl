@@ -6,9 +6,9 @@ use lib '../lib';
 use lib 'lib';
 use Limesco;
 
-do 'account-change.pl';
-do '../sim-change/sim-change.pl';
-do '../invoice-export/invoice-export.pl';
+do 'account-change.pl' or die $!;
+do '../sim-change/sim-change.pl' or die $!;
+do '../invoice-export/invoice-export.pl' or die $!;
 
 my $lim = Limesco->new_from_args(\@ARGV);
 my $shell = LimescoShell->new($lim);
