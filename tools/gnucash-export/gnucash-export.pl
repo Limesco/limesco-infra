@@ -183,10 +183,76 @@ Retrieve all direct debit information of the specified $date (interval).
 
 =cut
 
-=head4 print_invoices(@invoices, $format)
+sub get_all_directdebit {
+	my ($lim, $date) = @_;
+	my $dbh = $lim->get_database_handle();
+	my $query;
+	my $params;
+	my $where_clause;
+
+	if ($date =~ '^\+') {
+		$date = substr $date, 1;
+		$where_clause = ">= ?";
+		$params = 1;
+	} else {
+		$where_clause = q(BETWEEN ? AND (?::date + '1 month'::interval));
+		$params = 2;
+	}
+	$query = "SELECT df.id, df.processing_date, dt.invoice_id, invoice.rounded_without_taxes,
+			invoice.rounded_with_taxes, account.first_name, account.last_name,
+			account.company_name FROM directdebit_file df
+			LEFT OUTER JOIN directdebit_transaction dt ON (df.id = dt.directdebit_file_id)
+			LEFT OUTER JOIN invoice ON (invoice.id = dt.invoice_id)
+			LEFT OUTER JOIN account ON (account.id = invoice.account_id)
+			WHERE df.creation_time ".$where_clause;
+			# TODO: test of 'invoice.id' ook als 'i.id' kan worden geschreven
+
+	my $sth = $dbh->prepare($query);
+	my $numresults = ($params == 1) ? $sth->execute($date) : $sth->execute($date, $date);
+	my $directdebit = [];
+
+	if ($numresults > 0) {
+		while (my $row = $sth->fetchrow_hashref()) {
+			$row->{full_name} = $row->{last_name}.", ".$row->{first_name};
+			$row->{full_name} .= " (".$row->{company_name}.")" if ($row->{company_name} ne "");
+			push @{$directdebit}, $row;
+		}
+	}
+	return $directdebit if ($numresults > 0);
+	return "Empty result set.";
+}
+
+=head4 print_directdebit(@invoices, $format)
 
 Prints all the requested direct debit data in the specified format (plain, QIF)
 
 =cut
+
+sub print_directdebit {
+	my ($invoices, $format) = @_;
+	print "!Type:Oth A\n" if ($format eq "qif");
+
+	for ( 0 .. keys $invoices ) {
+		my $invoice = $invoices->[$_];
+		last if (!$invoice);
+
+		printf("%s\t%s\t%6.2f\t%6.2f\n",
+			$invoice->{invoice_id},
+			$invoice->{processing_date},
+			$invoice->{rounded_without_taxes},
+			$invoice->{rounded_with_taxes}) if ($invoice->{rounded_with_taxes} and $format eq "plain");
+
+		if ($format eq "qif") {
+			printf("!Account\nN%s\nTOth A\n^\n", $invoice->{full_name});
+			print "!Type:Oth A\n";
+
+			printf("D%s\nT%s\nMFactuur %s\nSAutomatisch incasso\n\$%s\n^\n",
+				$invoice->{processing_date},
+				$invoice->{rounded_with_taxes},
+				$invoice->{invoice_id},
+				$invoice->{rounded_with_taxes});
+		}
+	}
+}
 
 1;
