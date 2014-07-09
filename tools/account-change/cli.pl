@@ -499,12 +499,7 @@ sub run_phonenumber {
 		return;
 	}
 
-	if(!$command) {
-		warn help_phonenumber();
-		return;
-	}
-
-	if($command eq "list") {
+	if(!$command || $command eq "list") {
 		my $dbh = $self->{lim}->get_database_handle();
 		my $sth = $dbh->prepare("SELECT phonenumber, period FROM phonenumber WHERE sim_iccid=? ORDER BY period");
 		$sth->execute($self->{'sim'}{'iccid'});
@@ -541,7 +536,7 @@ sub run_phonenumber {
 
 sub help_phonenumber {
 	return <<HELP;
-phonenumber list
+phonenumber [list]
 phonenumber add [<number> <date>]
 phonenumber remove [<number> <date>]
 
@@ -598,7 +593,7 @@ sub run_directdebit {
 
 sub help_directdebit {
 	return <<HELP;
-directdebit info
+directdebit [info]
 directdebit generate
 directdebit authorize
 
