@@ -547,7 +547,7 @@ HELP
 }
 
 sub smry_phonenumber {
-	return "add or remove phone numbers from SIMs";
+	return "view, add or remove phone numbers from SIMs";
 }
 
 sub run_directdebit {
