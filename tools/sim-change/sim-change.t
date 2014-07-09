@@ -12,7 +12,7 @@ use Try::Tiny;
 use POSIX 'strftime';
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 28;
+plan tests => 38;
 
 require_ok("sim-change.pl");
 
@@ -297,5 +297,35 @@ is_deeply(get_sim($lim, "89310105029090284383", '2014-03-11'), {
 	sip_expiry => undef,
 	sip_trunk_password => undef,
 }, "SIM still exists before deletion");
+
+undef $exception;
+my $pn;
+try {
+	$pn = create_phonenumber($lim, "31612345678", "89310105029090284383", "2014-03-10");
+} catch {
+	$exception = $_ || 1;
+};
+
+ok(!$exception, "No exception thrown while adding phone number");
+ok($pn, "Phone number created");
+is_deeply($pn, {
+	phonenumber => "31612345678",
+	sim_iccid => "89310105029090284383",
+	period => "[2014-03-10,)",
+}, "Phone number created correctly");
+is_deeply(get_phonenumber($lim, "31612345678", "2014-03-10"), $pn, "Retrieved phonenumber is the same");
+is_deeply([list_phonenumbers($lim)], [$pn], "list_phonenumbers returns phone number");
+is_deeply([list_phonenumbers($lim, "89310105029090284383")], [$pn], "list_phonenumbers returns phone number");
+is_deeply([list_phonenumbers($lim, "89310105029090284384")], [], "list_phonenumbers gives empty with wrong ICCID");
+is_deeply([list_phonenumbers($lim, "2014-03-09")], [], "list_phonenumbers gives empty with wrong date");
+undef $exception;
+try {
+	delete_phonenumber($lim, "31612345678", "2014-03-12");
+} catch {
+	$exception = $_ || 1;
+};
+
+ok(!$exception, "No exception thrown while deleting phone number");
+is_deeply([list_phonenumbers($lim, "89310105029090284383", "2014-03-13")], [], "list_phonenumbers adhers end date");
 
 $dbh->disconnect;

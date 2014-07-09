@@ -53,6 +53,16 @@ sub _sim_object_info {
 	};
 }
 
+# and the same for temporal phone number changes
+sub _phonenumber_object_info {
+	return {
+		# The fields without which a phone number may not be created
+		required_fields => [qw(phonenumber sim_iccid)],
+		table_name => "phonenumber",
+		primary_key => "phonenumber",
+	};
+}
+
 =head3 create_sim($lim | $dbh, $sim, [$date])
 
 Create a SIM. $date is the optional starting date of the SIM; if not given,
@@ -73,7 +83,7 @@ sub create_sim {
 
 =head3 get_sim($lim | $dbh, $sim_iccid, [$date])
 
-Retrieve a SIM. If $date is given, retrieve an SIM on the given date.
+Retrieve a SIM. If $date is given, retrieve a SIM on the given date.
 
 =cut
 
@@ -122,6 +132,86 @@ assumed.
 sub delete_sim {
 	my ($lim, $sim_iccid, $date) = @_;
 	delete_object($lim, _sim_object_info(), $sim_iccid, $date);
+}
+
+=head3 create_phonenumber($lim | $dbh, $phonenumber, $sim_iccid, [$date])
+
+Create a phone number. $date is the optional starting date of the SIM; if not
+given, 'today' is assumed. $phonenumber must start with '316' and $sim_iccid
+must point to a valid SIM at the given date.
+
+This method returns the newly created phone number, or throws an exception if
+something failed.
+
+=cut
+
+sub create_phonenumber {
+	my ($lim, $phonenumber, $sim_iccid, $date) = @_;
+	return create_object($lim, _phonenumber_object_info(),
+		{phonenumber => $phonenumber, sim_iccid => $sim_iccid},
+		$date);
+}
+
+=head3 get_phonenumber($lim | $dbh, $phonenumber, [$date])
+
+Retrieve phone number information. If $date is given, retrieve phone number
+information on the given date.
+
+=cut
+
+sub get_phonenumber {
+	my ($lim, $phonenumber, $date) = @_;
+	return get_object($lim, _phonenumber_object_info(), $phonenumber, $date);
+}
+
+=head3 list_phonenumbers($lim | $dbh, [$sim_iccid, [$date]])
+
+Retrieve a list of phone numbers active on the given $date. If $date is not
+given, only phone numbers active 'today' are returned. If $sim_iccid (a string
+that looks like an ICCID) is given, filter out phone numbers belonging to the
+given SIM.
+
+=cut
+
+sub list_phonenumbers {
+	my ($lim, $arg1, $arg2) = @_;
+	my ($iccid, $date);
+	if($arg1) {
+		if($arg1 =~ /^20\d\d-\d\d-\d\d$/) {
+			$date = $arg1;
+		} elsif($arg1 =~ /^89310\d{15}$/) {
+			$iccid = $arg1;
+		} else {
+			die "Didn't understand parameter: $arg1\n";
+		}
+	}
+	if($arg2) {
+		if(!$date && $arg2 =~ /^20\d\d-\d\d-\d\d$/) {
+			$date = $arg2;
+		} else {
+			die "Didn't understand parameter: $arg2\n";
+		}
+	}
+	# TODO: add a WHERE clause
+	my @objects = list_objects($lim, _phonenumber_object_info(), $date);
+	if($iccid) {
+		return grep { $_->{'sim_iccid'} eq $iccid } @objects;
+	} else {
+		return @objects;
+	}
+}
+
+=head3 delete_phonenumber($lim | $dbh, $phonenumber, [$date])
+
+Delete a phone number from a SIM. $date is the optional date of deletion; if
+not given, 'today' is assumed. This method does not check what ICCID a phone
+number belongs to: you must check this yourself.
+
+=cut
+
+sub delete_phonenumber {
+	my ($lim, $phonenumber, $date) = @_;
+	delete_object($lim, _phonenumber_object_info(), $phonenumber, $date);
 }
 
 1;
