@@ -211,9 +211,33 @@ sub add_directdebit_account {
 	$sth->execute($authorization, $account_id, $period, $account_name, $iban, $bic, $date);
 }
 
+=head3 get_all_directdebit_authorizations($lim, [$accountid])
+
+Returns a list of all directdebit authorizations. When an $accountid is given,
+limit to those on a given account.
+
+=cut
+
+sub get_all_directdebit_authorizations {
+	my ($lim, $accountid) = @_;
+	my $dbh = $lim->get_database_handle();
+
+	my $query = "SELECT * FROM account_directdebit_info";
+	if($accountid) {
+		$query .= " WHERE account_id=?";
+	}
+	my $sth = $dbh->prepare($query);
+	$sth->execute($accountid ? ($accountid) : ());
+	my @authorizations;
+	while(my $row = $sth->fetchrow_hashref) {
+		push @authorizations, $row;
+	}
+	return @authorizations;
+}
+
 =head3 get_active_directdebit_authorizations($lim)
 
-Returns a list of all active directdebit authorizations.
+Returns a list of all active directdebit authorization ID's.
 
 =cut
 

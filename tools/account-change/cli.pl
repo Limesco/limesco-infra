@@ -9,6 +9,7 @@ use Limesco;
 do 'account-change.pl' or die $!;
 do '../sim-change/sim-change.pl' or die $!;
 do '../invoice-export/invoice-export.pl' or die $!;
+do '../directdebit/directdebit.pl' unless UNIVERSAL::can("main", "generate_directdebit_authorization") or die $!;
 
 my $lim = Limesco->new_from_args(\@ARGV);
 my $shell = LimescoShell->new($lim);
@@ -347,6 +348,8 @@ sub run_info {
 	} elsif($what && $what eq "account" && !$self->{account}) {
 		warn "Can't give info about account: no account selected (use 'account' first)\n";
 		return;
+	} elsif($what && $what eq "directdebit") {
+		return run_directdebit("info");
 	} elsif(!$what) {
 		$what = "account" if($self->{'account'});
 		$what = "sim" if($self->{'sim'});
@@ -395,7 +398,7 @@ sub run_info {
 
 sub help_info {
 	return <<HELP;
-info [sim|account]
+info [sim|account|directdebit]
 
 Give information about the currently selected SIM or account.
 HELP
@@ -550,4 +553,60 @@ HELP
 
 sub smry_phonenumber {
 	return "add or remove phone numbers from SIMs";
+}
+
+sub run_directdebit {
+	my ($self, $command) = @_;
+
+	if(!$command || $command eq "info") {
+		if(!$self->{'account'}) {
+			warn "Must have an account selected to see its directdebit info\n";
+			return;
+		}
+		my @authorizations = ::get_all_directdebit_authorizations($lim, $self->{'account'}{'id'});
+		foreach my $row (@authorizations) {
+			printf("%s: %s\n", $row->{'authorization_id'}, format_period($row->{'period'}));
+			printf("  Bank account name: %s\n", $row->{'bank_account_name'});
+			printf("  IBAN: %s\n", $row->{'iban'});
+			printf("  BIC: %s\n", $row->{'bic'});
+			printf("  Signature date: %s\n", $row->{'signature_date'});
+		}
+	} elsif($command eq "generate") {
+		print "New authorization ID: " . ::generate_directdebit_authorization($lim) . "\n";
+	} elsif($command eq "authorize") {
+		if(!$self->{'account'}) {
+			warn "Must have an account selected to see its directdebit info\n";
+			return;
+		}
+		my $authorization_id = ask_question("Authorization ID?", sub {
+			return length($_[0]) == 24 ? $_[0] : undef;
+		});
+		my $bank_account_name = ask_question("Bank account name?");
+		my $iban = ask_question("IBAN?");
+		my $bic = ask_question("BIC?");
+		my $date = ask_question("Signature date (YYYY-MM-DD)?");
+		try {
+			add_directdebit_account($lim, $self->{'account'}{'id'},
+				$authorization_id, $bank_account_name, $iban, $bic, $date);
+		} catch {
+			warn "Failed: $_\n";
+		};
+	} else {
+		warn help_directdebit();
+	}
+}
+
+sub help_directdebit {
+	return <<HELP;
+directdebit info
+directdebit generate
+directdebit authorize
+
+Get information about current authorizations, generate new authorization ID's
+or add a new authorization.
+HELP
+}
+
+sub smry_directdebit {
+	return "various direct-debit related operations";
 }
