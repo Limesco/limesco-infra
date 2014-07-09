@@ -509,7 +509,7 @@ sub run_phonenumber {
 		my $sth = $dbh->prepare("SELECT phonenumber, period FROM phonenumber WHERE sim_iccid=? ORDER BY period");
 		$sth->execute($self->{'sim'}{'iccid'});
 		while(my $row = $sth->fetchrow_hashref()) {
-			printf("  %s    (%s)\n", format_period($row->{'period'}));
+			printf("  %s    (%s)\n", $row->{'phonenumber'}, format_period($row->{'period'}));
 		}
 	} elsif($command eq "add" || $command eq "remove") {
 		if($number && $date) {
