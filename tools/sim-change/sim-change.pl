@@ -147,6 +147,9 @@ something failed.
 
 sub create_phonenumber {
 	my ($lim, $phonenumber, $sim_iccid, $date) = @_;
+	if($phonenumber =~ /^06-?(\d+)$/) {
+		$phonenumber = "316$1";
+	}
 	return create_object($lim, _phonenumber_object_info(),
 		{phonenumber => $phonenumber, sim_iccid => $sim_iccid},
 		$date);
