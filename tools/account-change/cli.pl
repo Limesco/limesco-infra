@@ -68,6 +68,18 @@ sub ask_date_or_today {
 	});
 }
 
+sub format_period {
+	my ($period) = @_;
+	my ($lower, $upper) = $period =~ /^(?:\[|\()([0-9\-]+),\s*([0-9\-]*)\)$/;
+	my $from = $lower ? sprintf("from %s",  $lower) : "";
+	my $to   = $upper ? sprintf("until %s", $upper) : "";
+	if(!$lower && !$upper) {
+		$from = "always";
+	}
+	my $space = $from && $to ? " " : "";
+	return $from . $space . $to;
+}
+
 sub init {
 	my ($self) = @_;
 	$self->{lim} = $self->{API}{args}[0];
@@ -491,16 +503,10 @@ sub run_phonenumber {
 
 	if($command eq "list") {
 		my $dbh = $self->{lim}->get_database_handle();
-		my $sth = $dbh->prepare("SELECT phonenumber, lower(period) as lower, upper(period) as upper FROM phonenumber WHERE sim_iccid=?");
+		my $sth = $dbh->prepare("SELECT phonenumber, period FROM phonenumber WHERE sim_iccid=? ORDER BY period");
 		$sth->execute($self->{'sim'}{'iccid'});
 		while(my $row = $sth->fetchrow_hashref()) {
-			my $from = $row->{'lower'} ? sprintf("from %s", $row->{'lower'}) : "";
-			my $to = $row->{'upper'} ? sprintf("until %s", $row->{'upper'}) : "";
-			if(!$row->{'lower'} && !$row->{'upper'}) {
-				$from = "always";
-			}
-			my $space = $from && $to ? " " : "";
-			printf("  %s    (%s%s%s)\n", $row->{'phonenumber'}, $from, $space, $to);
+			printf("  %s    (%s)\n", format_period($row->{'period'}));
 		}
 	} elsif($command eq "add" || $command eq "remove") {
 		if($number && $date) {
