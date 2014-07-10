@@ -83,9 +83,6 @@ if(!caller) {
 	if(! -f $template) {
 		die "Failed to open template '$template': it doesn't exist\n";
 	}
-	if(! -f $email_template) {
-		die "Failed to open template '$email_template': it doesn't exist\n";
-	}
 
 	my $invoice = get_invoice($lim, $invoice_id);
 	my $pdf_content;
@@ -109,6 +106,10 @@ if(!caller) {
 	}
 
 	if($email_address || $email_owner) {
+		if(! -f $email_template) {
+			die "Failed to open template '$email_template': it doesn't exist\n";
+		}
+
 		try {
 			send_invoice_by_email($lim, $invoice, $template, $email_template, $email_address) if $email_address;
 		} catch {
