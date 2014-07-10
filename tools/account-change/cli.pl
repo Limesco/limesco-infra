@@ -420,6 +420,17 @@ sub smry_ls {
 	return smry_info();
 }
 
+sub comp_invoice {
+	my ($self, $word, $line, $start) = @_;
+	try {
+		my $accountid = $self->{'account'}{'id'} if($self->{'account'});
+		my @invoices = map { $_->{'id'} } ::list_invoices($lim, $accountid);
+		return grep { substr($_, 0, length($word)) eq $word } @invoices;
+	} catch {
+		warn "Failed to tab complete: $_\n";
+	};
+}
+
 sub run_invoice {
 	my ($self, $invoice_id) = @_;
 	if(!$invoice_id && !$self->{'account'}) {
