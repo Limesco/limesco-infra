@@ -12,7 +12,7 @@ use Try::Tiny;
 use POSIX 'strftime';
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 38;
+plan tests => 39;
 
 require_ok("sim-change.pl");
 
@@ -253,6 +253,17 @@ is_deeply(get_sim($lim, "89310105029090284383", '2014-03-09'), {
 	sip_expiry => undef,
 	sip_trunk_password => undef,
 }, "Old SIM period was updated, no other changes");
+
+is_deeply([sim_changes_between($lim, "89310105029090284383", '2014-03-10', undef)],
+	[{
+		state => "ACTIVATED",
+		owner_account_id => 2,
+		data_type => "APN_NODATA",
+		exempt_from_cost_contribution => 0,
+		porting_state => "NO_PORT",
+		call_connectivity_type => "DIY",
+		period => '[2014-03-10,)',
+	}], "SIM modifications are returned correctly");
 
 # Try to delete SIM
 $exception = undef;

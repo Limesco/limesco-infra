@@ -6,7 +6,7 @@ use Exporter 'import';
 use Limesco;
 
 our $VERSION = $Limesco::VERSION;
-our @EXPORT = qw(get_object list_objects create_object update_object delete_object);
+our @EXPORT = qw(get_object list_objects create_object update_object delete_object object_changes_between);
 
 =head1 Limesco::TemporalSupport
 
@@ -293,6 +293,82 @@ sub delete_object {
 		}
 
 		$dbh->commit if $dbh_is_mine;
+	} catch {
+		$dbh->rollback if $dbh_is_mine;
+		die $_;
+	};
+}
+
+=head3 object_changes_between($lim | $dbh, $object_info, $object_id, [$startdate, [$enddate]])
+
+Retrieve the changes done between two dates, INCLUSIVE. If the same date is
+given for $startdate and $enddate, return the change on that date if there was
+one.  'undef' can be given instead of either of the two variables to mean
+"infinitely in that direction" or instead of both to mean "infinitely". For
+example, giving a startdate of undef and an enddate of '2014-03-01' means all
+changes to the given object before 2014-03-01, including changes done on
+2014-03-01.
+
+=cut
+
+sub object_changes_between {
+	my ($lim, $object_info, $object_id, $startdate, $enddate) = @_;
+
+	my $dbh_is_mine = ref($lim) eq "Limesco";
+	my $dbh = $dbh_is_mine ? $lim->get_database_handle() : $lim;
+
+	$dbh->begin_work if $dbh_is_mine;
+
+	try {
+		my $table_name = $object_info->{'table_name'};
+		my $primary_key = $object_info->{'primary_key'};
+
+		# Lock the table to ensure internal consistency while this process is running
+		$dbh->do("LOCK TABLE $table_name IN EXCLUSIVE MODE;");
+
+		# First, fetch all records valid between the given dates
+		my $sth = $dbh->prepare("SELECT *, "
+			# add a column to every row that says if the row is supposed to be returned,
+			# i.e. if the start date of the row is within [$startdate, $enddate+1)
+			."(lower(period) <@ daterange(?::date, (?::date + '1 day'::interval)::date)) "
+			."AS temporal_included_in_changes FROM $table_name WHERE $primary_key=? AND "
+			# select all records that fall between a slightly wider daterange than given
+			# this makes sure if the startdate is the date of the change, we also receive
+			# the record right before it (and vice versa for enddate)
+			."period && daterange((?::date - '1 day'::interval)::date, (?::date + '1 day'::interval)::date)");
+		$sth->execute($startdate, $enddate, $object_id, $startdate, $enddate);
+
+		my @rows_to_return;
+		my $previous_row;
+		while(my $row = $sth->fetchrow_hashref()) {
+			my $included = delete $row->{'temporal_included_in_changes'};
+			if($included) {
+				if(!defined($previous_row)) {
+					# No previous row in the database, so this is a creation row, return it as-is
+					push @rows_to_return, $row;
+				} else {
+					# Compute changes between the previous row and this one; assume keys of both
+					# hashes will be the same since they come from the same table
+					my %changes;
+					for(keys %$row) {
+						my $prev = $previous_row->{$_};
+						my $new  = $row->{$_};
+						if(!defined($prev) && defined($new)) {
+							$changes{$_} = $new;
+						} elsif(defined($prev) && !defined($new)) {
+							$changes{$_} = undef;
+						} elsif(defined($prev) && defined($new) && $prev ne $new) {
+							$changes{$_} = $new;
+						}
+					}
+					if(%changes) {
+						push @rows_to_return, \%changes;
+					}
+				}
+			}
+			$previous_row = $row;
+		}
+		return @rows_to_return;
 	} catch {
 		$dbh->rollback if $dbh_is_mine;
 		die $_;

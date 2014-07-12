@@ -12,7 +12,7 @@ use Try::Tiny;
 use POSIX 'strftime';
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 54;
+plan tests => 65;
 
 require_ok("account-change.pl");
 
@@ -401,6 +401,35 @@ is_deeply(get_account($lim, $account_id, '2014-03-09'), {
 	admin => '0',
 }, "Old account period was updated, no other changes");
 
+# See if the updates are OK
+is_deeply([account_changes_between($lim, $account_id, '2014-03-01', '2014-03-02')],
+	[], "No account changes before it was created");
+is_deeply([account_changes_between($lim, $account_id, '2014-03-02', '2014-03-03')],
+	[get_account($lim, $account_id, '2014-03-09')], "Account creation is returned when asking for changes over account creation date");
+my $account_change = {
+	period => '[2014-03-10,)',
+	company_name => 'My Test Company',
+};
+is_deeply([account_changes_between($lim, $account_id, '2014-03-10', '2014-03-10')],
+	[$account_change], "Account modifications are returned when asking for changes over account modification date");
+is_deeply([account_changes_between($lim, $account_id, '2014-03-02', '2014-03-10')],
+	[get_account($lim, $account_id, '2014-03-09'), $account_change],
+	"Account creation and modification are both returned when asking for changes over both dates");
+is_deeply([account_changes_between($lim, $account_id, '2014-03-11', '2014-03-12')],
+	[], "No account changes after it was modified");
+
+# 'undef' as either of the two fields means infinitely
+is_deeply([account_changes_between($lim, $account_id, undef, '2014-03-02')],
+	[], "No account changes before it was created (infinitely)");
+is_deeply([account_changes_between($lim, $account_id, '2014-03-11', undef)],
+	[], "No account changes after it was modified (infinitely)");
+is_deeply([account_changes_between($lim, $account_id, undef, '2014-03-03')],
+	[get_account($lim, $account_id, '2014-03-09')], "Account creation is returned (infinitely)");
+is_deeply([account_changes_between($lim, $account_id, '2014-03-10', undef)],
+	[$account_change], "Account modifications are returned (infinitely)");
+is_deeply([account_changes_between($lim, $account_id, undef, undef)],
+	[get_account($lim, $account_id, '2014-03-09'), $account_change], "All changes are returned (infinitely)");
+
 # Two properties at a time
 $exception = undef;
 try {
@@ -454,6 +483,15 @@ is_deeply(get_account($lim, $account_id), {
 	password_hash => undef,
 	admin => 0,
 }, "Two properties changed");
+
+# account_changes_between should act fine now too
+# (admin was updated back to 0, so it's not seen as a change)
+is_deeply([account_changes_between($lim, $account_id, '2014-03-11', '2014-03-12')],
+	[{
+		email => 'testmailtwo@limesco.nl',
+		city => 'Another City',
+		period => '[2014-03-12,)',
+	}], "Account modifications are returned correctly");
 
 # Properties that can't be changed
 $exception = undef;

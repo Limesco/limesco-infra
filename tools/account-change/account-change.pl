@@ -122,4 +122,21 @@ sub delete_account {
 	delete_object($lim, _account_object_info(), $account_id, $date);
 }
 
+=head3 account_changes_between($lim | $dbh, $account_id, [$startdate, [$enddate]])
+
+Retrieve the changes done between two dates, INCLUSIVE. If the same date is
+given for $startdate and $enddate, return the change on that date if there was
+one.  'undef' can be given instead of either of the two variables to mean
+"infinitely in that direction" or instead of both to mean "infinitely". For
+example, giving a startdate of undef and an enddate of '2014-03-01' means all
+changes to the given account ID before 2014-03-01, including changes done on
+2014-03-01.
+
+=cut
+
+sub account_changes_between {
+	my ($lim, $account_id, $startdate, $enddate) = @_;
+	object_changes_between($lim, _account_object_info(), $account_id, $startdate, $enddate);
+}
+
 1;

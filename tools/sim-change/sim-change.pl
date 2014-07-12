@@ -134,6 +134,23 @@ sub delete_sim {
 	delete_object($lim, _sim_object_info(), $sim_iccid, $date);
 }
 
+=head3 sim_changes_between($lim | $dbh, $sim_iccid, [$startdate, [$enddate]])
+
+Retrieve the changes done between two dates, INCLUSIVE. If the same date is
+given for $startdate and $enddate, return the change on that date if there was
+one.  'undef' can be given instead of either of the two variables to mean
+"infinitely in that direction" or instead of both to mean "infinitely". For
+example, giving a startdate of undef and an enddate of '2014-03-01' means all
+changes to the given SIM before 2014-03-01, including changes done on
+2014-03-01.
+
+=cut
+
+sub sim_changes_between {
+	my ($lim, $sim_iccid, $startdate, $enddate) = @_;
+	object_changes_between($lim, _sim_object_info(), $sim_iccid, $startdate, $enddate);
+}
+
 =head3 create_phonenumber($lim | $dbh, $phonenumber, $sim_iccid, [$date])
 
 Create a phone number. $date is the optional starting date of the SIM; if not
@@ -215,6 +232,23 @@ number belongs to: you must check this yourself.
 sub delete_phonenumber {
 	my ($lim, $phonenumber, $date) = @_;
 	delete_object($lim, _phonenumber_object_info(), $phonenumber, $date);
+}
+
+=head3 phonenumber_changes_between($lim | $dbh, $phonenumber, [$startdate, [$enddate]])
+
+Retrieve the changes done between two dates, INCLUSIVE. If the same date is
+given for $startdate and $enddate, return the change on that date if there was
+one.  'undef' can be given instead of either of the two variables to mean
+"infinitely in that direction" or instead of both to mean "infinitely". For
+example, giving a startdate of undef and an enddate of '2014-03-01' means all
+changes to the given phonenumber before 2014-03-01, including changes done on
+2014-03-01.
+
+=cut
+
+sub phonenumber_changes_between {
+	my ($lim, $phonenumber, $startdate, $enddate) = @_;
+	object_changes_between($lim, _phonenumber_object_info(), $phonenumber, $startdate, $enddate);
 }
 
 1;
