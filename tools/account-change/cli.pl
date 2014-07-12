@@ -616,3 +616,47 @@ HELP
 sub smry_directdebit {
 	return "various direct-debit related operations";
 }
+
+sub run_changes {
+	my ($self, $date) = @_;
+
+	my @changes;
+	if($self->{'sim'}) {
+		@changes = ::sim_changes_between($self->{'lim'}, $self->{'sim'}{'iccid'}, $date);
+	} elsif($self->{'account'}) {
+		@changes = ::account_changes_between($self->{'lim'}, $self->{'account'}{'id'}, $date);
+	} else {
+		warn "No SIM or account selected.\n";
+		return;
+	}
+
+	foreach my $changeset (@changes) {
+		my $period = delete $changeset->{'period'};
+		my ($startdate) = $period =~ /^(?:\(|\[)(\d{4}-\d\d-\d\d)?,.*\)$/;
+		if(!$startdate) {
+			die "Couldn't parse period: $period\n";
+		}
+
+		print "$startdate:";
+		print "\n" if keys %$changeset > 1;
+
+		foreach my $key (keys %$changeset) {
+			my $value = $changeset->{$key};
+			$value = "(undef)" if(!defined($value));
+			print "  $key => $value\n";
+		}
+	}
+}
+
+sub help_changes {
+	return <<HELP;
+changes [date]
+
+List all changes done to the current object (account or SIM). If a parameter is given,
+list all changes since that date.
+HELP
+}
+
+sub smry_changes {
+	return "list changes to the current object";
+}
