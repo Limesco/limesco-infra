@@ -136,6 +136,26 @@ sub smry_account {
 	return "selects an account";
 }
 
+sub comp_sim {
+	my ($self, $word, $line, $start) = @_;
+	if(!$self->{'account'}) {
+		return;
+	}
+
+	try {
+		my $dbh = $self->{'lim'}->get_database_handle();
+		my $sth = $dbh->prepare("SELECT DISTINCT iccid FROM sim WHERE owner_account_id=?");
+		$sth->execute($self->{'account'}{'id'});
+		my @iccids;
+		while(my $row = $sth->fetchrow_arrayref()) {
+			push @iccids, $row->[0];
+		}
+		return grep { substr($_, 0, length($word)) eq $word } @iccids;
+	} catch {
+		warn "Failed to tab complete: $_\n";
+	};
+}
+
 sub run_sim {
 	my ($self, $iccid) = @_;
 	if(@_ != 1 && @_ != 2) {
