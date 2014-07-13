@@ -396,6 +396,7 @@ sub object_changes_between {
 			}
 			$previous_row = $row;
 		}
+		$dbh->rollback if $dbh_is_mine;
 		return @rows_to_return;
 	} catch {
 		$dbh->rollback if $dbh_is_mine;
