@@ -140,17 +140,19 @@ if(!caller) {
 
 =head2 Methods
 
-=head3 list_invoices($lim, $account_id)
+=head3 list_invoices($lim, [$account_id])
 
-Return a list of all invoices for a given account ID.
+Return a list of all invoices for a given account ID. If no account ID is
+given, return a list of all invoices.
 
 =cut
 
 sub list_invoices {
 	my ($lim, $account_id) = @_;
 	my $dbh = $lim->get_database_handle();
-	my $sth = $dbh->prepare("SELECT * FROM invoice WHERE account_id=? ORDER BY id ASC");
-	$sth->execute($account_id);
+	my $where_clause = $account_id ? "WHERE account_id=?" : "";
+	my $sth = $dbh->prepare("SELECT * FROM invoice $where_clause ORDER BY id ASC");
+	$sth->execute($account_id ? ($account_id) : ());
 	my @invoices;
 	while(my $invoice = $sth->fetchrow_hashref) {
 		push @invoices, $invoice;
