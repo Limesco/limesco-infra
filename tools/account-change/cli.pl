@@ -108,6 +108,11 @@ sub run_account {
 		return;
 	}
 
+	if($self->{queued_changes}) {
+		warn "Cannot select account when changes are queued. Use 'commit' or 'rollback' first.\n";
+		return;
+	}
+
 	delete $self->{account};
 	delete $self->{sim};
 
@@ -160,6 +165,11 @@ sub run_sim {
 	my ($self, $iccid) = @_;
 	if(@_ != 1 && @_ != 2) {
 		warn help_sim();
+		return;
+	}
+
+	if($self->{queued_changes}) {
+		warn "Cannot select SIM when changes are queued. Use 'commit' or 'rollback' first.\n";
 		return;
 	}
 
@@ -221,6 +231,12 @@ sub smry_sim {
 
 sub run_back {
 	my ($self) = @_;
+
+	if($self->{queued_changes}) {
+		warn "Cannot go back when changes are queued. Use 'commit' or 'rollback' first.\n";
+		return;
+	}
+
 	if($self->{account}) {
 		if($self->{sim}) {
 			delete $self->{sim};
@@ -318,6 +334,12 @@ sub cli_create_sim {
 
 sub run_create {
 	my ($self) = @_;
+
+	if($self->{queued_changes}) {
+		warn "Cannot create anything when changes are queued. Use 'commit' or 'rollback' first.\n";
+		return;
+	}
+
 	if(!$self->{account}) {
 		try {
 			$self->{account} = cli_create_account($self);
@@ -667,6 +689,15 @@ sub run_changes {
 			print "  $key => $value\n";
 		}
 	}
+
+	if($self->{queued_changes}) {
+		print "\nQueued changes:\n";
+		foreach my $key (keys %{$self->{'queued_changes'}}) {
+			my $value = $self->{'queued_changes'}{$key};
+			$value = "(undef)" if(!defined($value));
+			print "  $key => $value\n";
+		}
+	}
 }
 
 sub help_changes {
@@ -674,10 +705,137 @@ sub help_changes {
 changes [date]
 
 List all changes done to the current object (account or SIM). If a parameter is given,
-list all changes since that date.
+list all changes since that date. If changes are queued, list them too.
 HELP
 }
 
 sub smry_changes {
 	return "list changes to the current object";
+}
+
+sub run_set {
+	my ($self, $variable, $value) = @_;
+	if(@_ > 3 || !$variable) {
+		warn help_set();
+		return;
+	}
+
+	if(!$self->{'account'}) {
+		warn "You must select an account or SIM first.\n";
+		return;
+	}
+
+	my @forbidden_variables = qw(id iccid period activation_invoice_id last_monthly_fees_invoice_id
+		last_monthly_fees_month);
+	for(@forbidden_variables) {
+		if($_ eq $variable) {
+			warn "Variable cannot be changed using shell: $variable\n";
+			return;
+		}
+	}
+
+	my $object = $self->{'sim'} ? $self->{'sim'} : $self->{'account'};
+	if(!exists $object->{$variable}) {
+		warn "No such variable in SIM: $variable\n";
+		return;
+	}
+
+	$self->{queued_changes} ||= {};
+	$self->{queued_changes}{$variable} = $value;
+	my $num = keys %{$self->{queued_changes}};
+	print "$num queued changes.\n";
+	print "Run 'changes' to see them, 'commit' to commit them, 'rollback' to cancel them.\n";
+}
+
+sub help_set {
+	return <<HELP;
+set variable
+set variable value...
+
+Queue a change to set 'variable' to 'value' in the selected object. If no
+'value' is given, set it to undefined. 'variable' must be a valid property of
+the currently selected object. Select an account or SIM first using 'account'
+or 'sim'. When you want to change an account property and have a SIM selected,
+use 'back' to go back to the account first.
+
+After queueing a set of changes, you MUST USE the 'commit' command to actually
+confirm the changes. Use the 'rollback' command to rollback the queued changes.
+HELP
+}
+
+sub smry_set {
+	return "prepare changes to the current object";
+}
+
+sub run_rollback {
+	my ($self) = @_;
+
+	if(!$self->{queued_changes}) {
+		warn "No changes were queued.\n";
+		return;
+	}
+
+	my $q = delete $self->{queued_changes};
+	print "Rolled back changes:\n";
+	foreach(keys %$q) {
+		my $value = $q->{$_};
+		$value = "(undef)" if(!defined($value));
+		print "  $_ => $value\n";
+	}
+}
+
+sub help_rollback {
+	return <<HELP;
+rollback
+
+Rollback the queued changes, i.e. forget about them without executing them.
+HELP
+}
+
+sub smry_rollback {
+	return "rollback prepared changes";
+}
+
+sub run_commit {
+	my ($self, $date) = @_;
+
+	if(!$self->{queued_changes}) {
+		warn "No changes were queued.\n";
+		return;
+	}
+
+	if(!$date) {
+		warn "Cannot commit without a date. Maybe you meant 'commit today'?\n";
+		return;
+	}
+
+	my $q = delete $self->{queued_changes};
+	try {
+		if($self->{sim}) {
+			::update_sim($self->{lim}, $self->{sim}{iccid}, $q, $date);
+		} elsif($self->{account}) {
+			::update_account($self->{lim}, $self->{account}{id}, $q, $date);
+		} else {
+			die "No account? This should be impossible\n";
+			# ... because the other commands disallow scope changes when there are
+			# queued changes
+		}
+		my $num = keys %$q;
+		print "Done. $num changes committed.\n";
+	} catch {
+		warn "Commit failed: $_\n";
+	};
+}
+
+sub help_commit {
+	return <<HELP;
+commit <date>
+
+Commit the queued changes. You must give a date (or 'today') when the changes
+become effective.
+HELP
+}
+
+sub smry_commit {
+	return "commit prepared changes";
 }
