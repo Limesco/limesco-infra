@@ -331,7 +331,7 @@ sub run_create {
 			warn $_;
 		};
 	} else {
-		warn "Cannot create anything in SIM mode. Use 'back' to go back.";
+		warn "Cannot create anything in SIM mode. Use 'back' to go back.\n";
 	}
 }
 
