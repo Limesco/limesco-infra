@@ -166,8 +166,14 @@ failed.
 =cut
 
 sub update_object {
-	my ($lim, $object_info, $object_id, $changes, $date) = @_;
+	my ($lim, $object_info, $object_id, $orig_changes, $date) = @_;
 	$date ||= 'today';
+
+	# copy orig_changes to changes so we don't clobber input
+	my $changes = {};
+	foreach(keys %$orig_changes) {
+		$changes->{$_} = $orig_changes->{$_};
+	}
 
 	my $dbh_is_mine = ref($lim) eq "Limesco";
 	my $dbh = $dbh_is_mine ? $lim->get_database_handle() : $lim;
