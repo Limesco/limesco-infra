@@ -186,11 +186,11 @@ sub update_object {
 
 		$dbh->do("LOCK TABLE $table_name;");
 
-		my $sth = $dbh->prepare("SELECT *, lower(period) AS old_date, ?::date AS new_date FROM $table_name WHERE $primary_key=? AND upper(period) IS NULL AND period @> ?::date");
+		my $sth = $dbh->prepare("SELECT *, lower(period) AS old_date, upper(period) AS propagate_date, ?::date AS new_date FROM $table_name WHERE $primary_key=? AND period @> ?::date");
 		$sth->execute($date, $object_id, $date);
 		my $old_object = $sth->fetchrow_hashref;
 		if(!$old_object) {
-			die "Cannout change object $object_id at date $date, doesn't exist or it is already historical";
+			die "Cannot change object $object_id at date $date, doesn't exist or is deleted here";
 		}
 
 		# If the new date overwrites the last period, delete the row, otherwise update it
@@ -238,7 +238,9 @@ sub update_object {
 		}
 
 		unshift @db_fields, "period";
-		unshift @db_values, '['.$date.',)';
+		my $propagate_date = $old_object->{'propagate_date'};
+		my $new_enddate = $propagate_date ? $propagate_date : '';
+		unshift @db_values, '['.$date.',' . $new_enddate . ')';
 
 		unshift @db_fields, $primary_key;
 		unshift @db_values, $object_id;
@@ -248,6 +250,26 @@ sub update_object {
 
 		$sth = $dbh->prepare($query);
 		$sth->execute(@db_values);
+
+		# if we changed a historical record, propagate these changes to future records
+		if(defined($propagate_date)) {
+			foreach my $key (keys %$orig_changes) {
+				# find the first row where this key changed again
+				$query = "SELECT lower(period) FROM $table_name WHERE $primary_key=? AND lower(period) >= ? AND $key <> ? ORDER BY period ASC";
+				$sth = $dbh->prepare($query);
+				$sth->execute($old_object->{$primary_key}, $propagate_date, $old_object->{$key});
+				my $propagate_end_date = $sth->fetchrow_arrayref;
+				$propagate_end_date = $propagate_end_date->[0] if($propagate_end_date);
+
+				if(!$propagate_end_date || $propagate_end_date ne $propagate_date) {
+					# propagate this change to all rows from $propagate_date to $propagate_end_date
+					$query = "UPDATE $table_name SET $key=? WHERE $primary_key=? AND period <@ daterange(?::date, ?::date)";
+					$sth = $dbh->prepare($query);
+					$sth->execute($orig_changes->{$key}, $old_object->{$primary_key}, $propagate_date, $propagate_end_date);
+				}
+			}
+		}
+
 		$dbh->commit if $dbh_is_mine;
 		return get_object($lim, $object_info, $object_id, $date);
 	} catch {

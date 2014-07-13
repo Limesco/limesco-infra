@@ -12,7 +12,7 @@ use Try::Tiny;
 use POSIX 'strftime';
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 65;
+plan tests => 86;
 
 require_ok("account-change.pl");
 
@@ -541,32 +541,7 @@ is_deeply(get_account($lim, $account_id), {
 	admin => 0,
 }, "No properties changed");
 
-# Make a change in history, that's not allowed
-$exception = undef;
-try {
-	update_account($lim, $account_id, {
-		company_name => "My Test Company",
-	}, '2014-03-11');
-} catch {
-	$exception = $_ || 1;
-};
-
-ok($exception, "Exception thrown while changing company name in history");
-is_deeply(get_account($lim, $account_id), {
-	id => $account_id,
-	period => '[2014-03-12,)',
-	company_name => "My Test Company",
-	first_name => "Test First Name",
-	last_name => "Test Last Name",
-	street_address => "Test Street Address",
-	postal_code => "Test Postal Code",
-	city => "Another City",
-	email => 'testmailtwo@limesco.nl',
-	password_hash => undef,
-	admin => 0,
-}, "Company name changed");
-
-# Make a change in latest record, that's allowed
+# Make a change in latest record
 $exception = undef;
 try {
 	update_account($lim, $account_id, {
@@ -656,5 +631,99 @@ try {
 
 ok($exception, "Exception thrown while trying to fetch account on date 2014-03-12");
 ok(!defined($account), "Account undefined");
+
+## Test historical changes using new objects ##
+undef $account_id;
+$account = create_account($lim, {
+	company_name => "Company Before Change",
+	first_name => "First Name Before Change",
+	last_name => "Last Name",
+	street_address => "Street Address",
+	postal_code => "Postal Code",
+	city => "City",
+	email => 'testemail@limesco.nl',
+	password_hash => "",
+	admin => 0,
+}, '2014-06-01');
+
+update_account($lim, $account->{'id'}, {
+	company_name => "Company After Change",
+}, '2014-06-05');
+
+# now, the [2014-06-01, 2014-06-05) record is historical.
+# if we change the company_name, it should change until 2014-06-05.
+
+undef $exception;
+try {
+	update_account($lim, $account->{'id'}, {
+		company_name => "Company During Change",
+	}, '2014-06-03');
+} catch {
+	$exception = $_ || 1;
+};
+
+ok(!$exception, "Update succeeded");
+is(get_account($lim, $account->{'id'}, '2014-06-01')->{'company_name'},
+	"Company Before Change", "Original company name is OK");
+is(get_account($lim, $account->{'id'}, '2014-06-03')->{'company_name'},
+	"Company During Change", "Updated company name is OK");
+is(get_account($lim, $account->{'id'}, '2014-06-05')->{'company_name'},
+	"Company After Change", "Final company name is OK");
+
+# Now, check if historical changes are propagated correctly
+
+update_account($lim, $account->{'id'}, {
+	company_name => "Company After Third Change",
+}, '2014-06-09');
+update_account($lim, $account->{'id'}, {
+	company_name => "Company After Second Change",
+}, '2014-06-07');
+
+undef $exception;
+try {
+	update_account($lim, $account->{'id'}, {
+		first_name => "First Name After Change",
+	}, '2014-06-02');
+} catch {
+	$exception = $_ || 1;
+};
+
+ok(!$exception, "Update succeeded");
+is(get_account($lim, $account->{'id'}, '2014-06-01')->{'company_name'},
+	"Company Before Change", "Original company name is OK");
+is(get_account($lim, $account->{'id'}, '2014-06-02')->{'company_name'},
+	"Company Before Change", "Original company name is OK");
+is(get_account($lim, $account->{'id'}, '2014-06-03')->{'company_name'},
+	"Company During Change", "Updated company name is OK");
+is(get_account($lim, $account->{'id'}, '2014-06-05')->{'company_name'},
+	"Company After Change", "Final company name is OK");
+is(get_account($lim, $account->{'id'}, '2014-06-07')->{'company_name'},
+	"Company After Second Change", "Second company name is OK");
+is(get_account($lim, $account->{'id'}, '2014-06-09')->{'company_name'},
+	"Company After Third Change", "Third company name is OK");
+is(get_account($lim, $account->{'id'}, '2014-06-01')->{'first_name'},
+	"First Name Before Change", "Original name is OK");
+is(get_account($lim, $account->{'id'}, '2014-06-02')->{'first_name'},
+	"First Name After Change", "Updated name is OK");
+is(get_account($lim, $account->{'id'}, '2014-06-03')->{'first_name'},
+	"First Name After Change", "Propagated name is OK");
+is(get_account($lim, $account->{'id'}, '2014-06-05')->{'first_name'},
+	"First Name After Change", "Final name stays OK");
+is(get_account($lim, $account->{'id'}, '2014-06-07')->{'first_name'},
+	"First Name After Change", "Final name stays OK");
+is(get_account($lim, $account->{'id'}, '2014-06-09')->{'first_name'},
+	"First Name After Change", "Final name stays OK");
+is(get_account($lim, $account->{'id'}, '2014-06-01')->{'last_name'},
+	"Last Name", "Last name is OK");
+is(get_account($lim, $account->{'id'}, '2014-06-02')->{'last_name'},
+	"Last Name", "Last name is OK");
+is(get_account($lim, $account->{'id'}, '2014-06-03')->{'last_name'},
+	"Last Name", "Last name is OK");
+is(get_account($lim, $account->{'id'}, '2014-06-05')->{'last_name'},
+	"Last Name", "Last name is OK");
+is(get_account($lim, $account->{'id'}, '2014-06-05')->{'last_name'},
+	"Last Name", "Last name is OK");
+is(get_account($lim, $account->{'id'}, '2014-06-05')->{'last_name'},
+	"Last Name", "Last name is OK");
 
 $dbh->disconnect;
