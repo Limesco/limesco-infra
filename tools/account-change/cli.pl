@@ -658,6 +658,7 @@ sub run_changes {
 		}
 
 		print "$startdate:";
+		print " (no actual changes)\n" if keys %$changeset == 0;
 		print "\n" if keys %$changeset > 1;
 
 		foreach my $key (keys %$changeset) {
