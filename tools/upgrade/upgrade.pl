@@ -117,7 +117,7 @@ Returns the latest schema version supported by this tool.
 =cut
 
 sub get_latest_schema_version {
-	return 4;
+	return 5;
 }
 
 =head3 update_schema_version($lim, $dbh, $version)
@@ -303,6 +303,7 @@ sub initialize_database {
 			."AS 'SELECT array_lower(haystack, 1) IS NULL OR needle = ANY (haystack);' "
 			."LANGUAGE SQL IMMUTABLE;");
 
+		$dbh->do("CREATE TYPE servicetype AS ENUM('DATA', 'SMS', 'VOICE');");
 		$dbh->do("CREATE TABLE invoice_itemline (
 			id SERIAL PRIMARY KEY NOT NULL,
 			type ITEMLINETYPE NOT NULL,
@@ -336,12 +337,13 @@ sub initialize_database {
 			price_per_call MONEY8,
 			CHECK (number_of_calls IS NULL OR price_per_call IS NOT NULL),
 			CHECK (number_of_calls IS NOT NULL OR price_per_call IS NULL),
-			price_per_minute MONEY8
+			price_per_minute MONEY8,
 			CHECK (number_of_calls IS NULL OR price_per_minute IS NOT NULL),
-			CHECK (number_of_calls IS NOT NULL OR price_per_minute IS NULL)
+			CHECK (number_of_calls IS NOT NULL OR price_per_minute IS NULL),
+
+			service SERVICETYPE NULL
 		);");
 
-		$dbh->do("CREATE TYPE servicetype AS ENUM('DATA', 'SMS', 'VOICE');");
 		$dbh->do("CREATE TYPE directiontype AS ENUM('IN', 'OUT');");
 
 		$dbh->do("CREATE TABLE pricing (
@@ -449,7 +451,13 @@ sub upgrade_database {
 			$current_version = 4;
 		}
 
-		if($current_version > 4) {
+		if($current_version == 4) {
+			add_service_invoice_itemline_column($lim, $dbh);
+			update_schema_version($lim, $dbh, 5);
+			$current_version = 5;
+		}
+
+		if($current_version > 5) {
 			die "Not implemented";
 		}
 
@@ -526,6 +534,44 @@ sub add_cdr_import_tables {
 		import_time TIMESTAMP NOT NULL,
 		error LONGTEXT NULL
 	)");
+}
+
+=head3 add_service_invoice_itemline_column($lim, $dbh)
+
+Add the optional service column to the invoice-itemline table. Update all
+current itemlines so that their service is set to the service in the pricing
+line with the same description, if possible.
+
+=cut
+
+sub add_service_invoice_itemline_column {
+	my ($lim, $dbh) = @_;
+
+	$dbh->do("ALTER TABLE invoice_itemline ADD COLUMN service SERVICETYPE NULL;");
+	my $sth = $dbh->prepare("SELECT DISTINCT description FROM invoice_itemline");
+	$sth->execute();
+	my @descriptions;
+	while(my $row = $sth->fetchrow_arrayref) {
+		push @descriptions, $row->[0];
+	}
+
+	$sth = $dbh->prepare("SELECT service FROM pricing WHERE ?::text LIKE CONCAT('%', description, '%') ORDER BY id DESC");
+	my %descriptions;
+	foreach my $description (@descriptions) {
+		$sth->execute($description);
+		my $service = $sth->fetchrow_arrayref;
+		if($service) {
+			$descriptions{$description} = $service->[0];
+		}
+	}
+
+	$sth = $dbh->prepare("UPDATE invoice_itemline SET service=? WHERE description=?");
+	foreach(keys %descriptions) {
+		$sth->execute($descriptions{$_}, $_);
+	}
+
+	$sth = $dbh->prepare("UPDATE invoice_itemline SET service='DATA' where description like 'Dataverbruik%'");
+	$sth->execute();
 }
 
 1;

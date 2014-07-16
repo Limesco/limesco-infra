@@ -320,7 +320,7 @@ sub generate_invoice {
 	my @itemlines;
 
 	my $normal_itemline = sub {
-		my ($invoice_id, $description, $count, $price) = @_;
+		my ($invoice_id, $description, $count, $price, $service) = @_;
 		push @itemlines, {
 			type => "NORMAL",
 			invoice_id => $invoice_id,
@@ -329,6 +329,7 @@ sub generate_invoice {
 			rounded_total => sprintf("%.2f", $count * $price),
 			item_price => $price,
 			item_count => $count,
+			service => $service,
 		};
 	};
 
@@ -344,6 +345,7 @@ sub generate_invoice {
 			price_per_call => $pricing->{'price_per_line'},
 			price_per_minute => $pricing->{'price_per_unit'} * 60,
 			rounded_total => sprintf("%.2f", $rounded_total),
+			service => $pricing->{'service'},
 		};
 	};
 
@@ -498,7 +500,7 @@ sub generate_invoice {
 				my $num = @{$cdr_per_pricing_rule{$_}};
 				my $price_per_line = $pricing->{'price_per_line'};
 				my $description = sprintf("%s", $pricing->{'description'});
-				$normal_itemline->($invoice_id, $description, $num, $price_per_line);
+				$normal_itemline->($invoice_id, $description, $num, $price_per_line, $pricing->{'service'});
 			} elsif($pricing->{'service'} eq "VOICE") {
 				my $sum_units = 0;
 				my $sum_prices = 0;
@@ -551,10 +553,10 @@ sub generate_invoice {
 						$in_bundle_usage = $limit;
 					}
 					my $description = sprintf("%s (bundel %s)", "Data Nederland", $month);
-					$normal_itemline->($invoice_id, $description, $in_bundle_usage, 0);
+					$normal_itemline->($invoice_id, $description, $in_bundle_usage, 0, "DATA");
 					if($out_bundle_usage > 0) {
 						$description = sprintf("%s (buiten bundel %s, SIM %s)", "Data Nederland", $month, $number);
-						$normal_itemline->($invoice_id, $description, $out_bundle_usage, $DATA_USAGE_OUT_OF_BUNDLE_PER_MB / 1000);
+						$normal_itemline->($invoice_id, $description, $out_bundle_usage, $DATA_USAGE_OUT_OF_BUNDLE_PER_MB / 1000, "DATA");
 					}
 				} elsif($apn eq "APN_NODATA") {
 					my ($tier1, $tier2, $tier3) = (0, 0, 0);
@@ -568,11 +570,11 @@ sub generate_invoice {
 					} else {
 						$tier1 = $sum;
 					}
-					$normal_itemline->($invoice_id, "Dataverbruik onder 500 MB", $tier1, $DATA_USAGE_TIER1_PER_MB / 1000);
+					$normal_itemline->($invoice_id, "Dataverbruik onder 500 MB", $tier1, $DATA_USAGE_TIER1_PER_MB / 1000, "DATA");
 					if($tier2 > 0 || $tier3 > 0) {
-						$normal_itemline->($invoice_id, "Dataverbruik onder 1000 MB", $tier2, $DATA_USAGE_TIER2_PER_MB / 1000);
+						$normal_itemline->($invoice_id, "Dataverbruik onder 1000 MB", $tier2, $DATA_USAGE_TIER2_PER_MB / 1000, "DATA");
 						if($tier3 > 0) {
-							$normal_itemline->($invoice_id, "Dataverbruik boven 1000 MB", $tier3, $DATA_USAGE_TIER3_PER_MB / 1000);
+							$normal_itemline->($invoice_id, "Dataverbruik boven 1000 MB", $tier3, $DATA_USAGE_TIER3_PER_MB / 1000, "DATA");
 						}
 					}
 				} else {
@@ -620,9 +622,9 @@ sub generate_invoice {
 
 		foreach my $il (@itemlines) {
 			$dbh->do("INSERT INTO invoice_itemline (type, invoice_id, description, taxrate, rounded_total, base_amount, item_price,
-				item_count, number_of_calls, number_of_seconds, price_per_call, price_per_minute) VALUES (?, ?, ?, ?, ?, ?, ?,
-				?, ?, ?, ?, ?);", undef, map { $il->{$_} } qw/type invoice_id description taxrate rounded_total base_amount item_price
-					item_count number_of_calls number_of_seconds price_per_call price_per_minute/);
+				item_count, number_of_calls, number_of_seconds, price_per_call, price_per_minute, service) VALUES (?, ?, ?, ?, ?, ?, ?,
+				?, ?, ?, ?, ?, ?);", undef, map { $il->{$_} } qw/type invoice_id description taxrate rounded_total base_amount item_price
+					item_count number_of_calls number_of_seconds price_per_call price_per_minute, service/);
 		}
 		foreach my $il (@queued_itemlines) {
 			$dbh->do("UPDATE invoice_itemline SET queued_for_account_id=NULL, invoice_id=? WHERE id=?", undef,
