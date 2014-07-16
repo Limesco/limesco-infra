@@ -175,11 +175,6 @@ sub price_cdr {
 		undef $sim;
 	}
 
-	if($sim && $sim->{'state'} ne "ALLOCATED" && $sim->{'state'} ne "ACTIVATION_REQUESTED" && $sim->{'state'} ne "ACTIVATED") {
-		$unpricable_error = sprintf("This CDR is unpricable: it belongs to SIM with ICCID %s, but that SIM is in %s state", $sim->{'iccid'}, $sim->{'state'});
-		undef $sim;
-	}
-
 	# Enter monstruous query to find all pricing rules that match this CDR
 	my $sim_specific_where = $sim ? "AND constraint_list_matches(?, call_connectivity_type::text[])" : "";
 	my $sim_specific_variables = $sim ? [$sim->{'call_connectivity_type'}] : [];
