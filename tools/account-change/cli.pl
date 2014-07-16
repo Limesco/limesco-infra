@@ -634,7 +634,7 @@ sub run_directdebit {
 		my $bic = ask_question("BIC?");
 		my $date = ask_question("Signature date (YYYY-MM-DD)?");
 		try {
-			add_directdebit_account($lim, $self->{'account'}{'id'},
+			::add_directdebit_account($lim, $self->{'account'}{'id'},
 				$authorization_id, $bank_account_name, $iban, $bic, $date);
 		} catch {
 			warn "Failed: $_\n";
