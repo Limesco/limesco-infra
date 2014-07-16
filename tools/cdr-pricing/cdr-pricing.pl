@@ -70,7 +70,11 @@ if(!caller) {
 		foreach(@unpricable_cdrs) {
 			print "  " . dump_cdr($_) . "\n";
 		}
-		print "$pricable_cdrs priced, " . scalar(@unpricable_cdrs) . " are still unpricable.\n";
+		print "$pricable_cdrs priced, " . scalar(@unpricable_cdrs) . " are still unpricable.\n\n";
+		print "The first unpricable CDR looks like this:\n";
+		print Dumper($unpricable_cdrs[0]);
+		print "The error that occured while pricing the first unpricable CDR:\n";
+		price_cdr($lim, $unpricable_cdrs[0]);
 	}
 }
 
