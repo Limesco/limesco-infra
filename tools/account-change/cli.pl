@@ -627,7 +627,11 @@ sub run_directdebit {
 			return;
 		}
 		my $authorization_id = ask_question("Authorization ID?", sub {
-			return length($_[0]) == 24 ? $_[0] : undef;
+			if(length($_[0]) != 24) {
+				warn "Invalid authorization ID.\n";
+				undef $_[0];
+			}
+			return $_[0];
 		});
 		my $bank_account_name = ask_question("Bank account name?");
 		my $iban = ask_question("IBAN?");
