@@ -238,7 +238,7 @@ Return a single-line string with some information that identifies a CDR.
 
 sub dump_cdr {
 	my ($cdr) = @_;
-	return sprintf("ID %d, Call ID %s, date %s", $cdr->{'id'}, $cdr->{'call_id'}, $cdr->{'time'});
+	return sprintf("ID %d, Call ID %s, SU account %s, date %s", $cdr->{'id'}, $cdr->{'call_id'}, $cdr->{'speakup_account'}, $cdr->{'time'});
 }
 
 1;
