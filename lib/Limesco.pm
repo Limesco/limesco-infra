@@ -18,6 +18,9 @@ sub new_from_args {
 		my $arg = $args->[$i];
 		if($arg eq "-c") {
 			$configfile = $args->[++$i];
+		} elsif($arg eq "--help") {
+			exec("perldoc", $0);
+			die "Failed to open perldoc, do you have it installed?\n";
 		} elsif(!$param_handler->($args, \$i)) {
 			croak "Unknown parameter: $arg";
 		}
