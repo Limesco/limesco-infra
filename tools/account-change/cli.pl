@@ -71,7 +71,7 @@ sub ask_date_or_today {
 
 sub format_period {
 	my ($period) = @_;
-	my ($lower, $upper) = $period =~ /^(?:\[|\()([0-9\-]+),\s*([0-9\-]*)\)$/;
+	my ($lower, $upper) = $period =~ /^(?:\[|\()([0-9\-]*),\s*([0-9\-]*)\)$/;
 	my $from = $lower ? sprintf("from %s",  $lower) : "";
 	my $to   = $upper ? sprintf("until %s", $upper) : "";
 	if(!$lower && !$upper) {
