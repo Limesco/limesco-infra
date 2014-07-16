@@ -92,7 +92,7 @@ sub get_all_active_account_ids {
 	$date ||= 'today';
 
 	my @accounts;
-	my $sth = $dbh->prepare("SELECT id FROM account WHERE period @> ?::date");
+	my $sth = $dbh->prepare("SELECT id FROM account WHERE period @> ?::date ORDER BY id ASC");
 	$sth->execute($date);
 	while(my $row = $sth->fetchrow_arrayref) {
 		push @accounts, $row->[0];
