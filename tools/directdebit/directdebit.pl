@@ -11,6 +11,8 @@ use DateTime;
 use Try::Tiny;
 use Business::IBAN;
 use Encode;
+use v5.14; # Unicode string features
+use open qw( :encoding(UTF-8) :std);
 
 =head1 directdebit.pl
 
