@@ -624,7 +624,7 @@ sub generate_invoice {
 			$dbh->do("INSERT INTO invoice_itemline (type, invoice_id, description, taxrate, rounded_total, base_amount, item_price,
 				item_count, number_of_calls, number_of_seconds, price_per_call, price_per_minute, service) VALUES (?, ?, ?, ?, ?, ?, ?,
 				?, ?, ?, ?, ?, ?);", undef, map { $il->{$_} } qw/type invoice_id description taxrate rounded_total base_amount item_price
-					item_count number_of_calls number_of_seconds price_per_call price_per_minute, service/);
+					item_count number_of_calls number_of_seconds price_per_call price_per_minute service/);
 		}
 		foreach my $il (@queued_itemlines) {
 			$dbh->do("UPDATE invoice_itemline SET queued_for_account_id=NULL, invoice_id=? WHERE id=?", undef,
