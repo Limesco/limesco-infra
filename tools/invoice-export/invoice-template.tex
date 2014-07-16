@@ -80,10 +80,16 @@ Factuurdatum & \beginperl formatDate($invoice->{'date'}) \endperl
 
 \beginperl
 	foreach my $itemline (grep { $_->{'type'} ne "TAX" } @{$invoice->{'item_lines'}}) {
+		my $service = $itemline->{'service'};
 		my @description = split /\n/, $itemline->{'description'};
 		if($itemline->{'type'} eq "NORMAL") {
-			$OUT .= sprintf("%s & %d & %.4f & %.2f \\\\\n", shift @description, $itemline->{'item_count'}, $itemline->{'item_price'},
-				$itemline->{'rounded_total'});
+			if($service eq "DATA") {
+				$OUT .= sprintf("%s & %d KB & %.4f per MB & %.2f \\\\\n", shift @description, $itemline->{'item_count'}, $itemline->{'item_price'} * 1000,
+					$itemline->{'rounded_total'});
+			} else {
+				$OUT .= sprintf("%s & %d & %.4f & %.2f \\\\\n", shift @description, $itemline->{'item_count'}, $itemline->{'item_price'},
+					$itemline->{'rounded_total'});
+			}
 		} elsif($itemline->{'type'} eq "DURATION") {
 			$OUT .= sprintf("%s & %d gesprekken & %.4f / gesprek & %.2f \\\\\n", shift @description, $itemline->{'number_of_calls'},
 				$itemline->{'price_per_call'}, $itemline->{'rounded_total'});
