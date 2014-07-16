@@ -12,7 +12,7 @@ use Try::Tiny;
 use POSIX 'strftime';
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 39;
+plan tests => 50;
 
 require_ok("sim-change.pl");
 
@@ -309,6 +309,46 @@ is_deeply(get_sim($lim, "89310105029090284383", '2014-03-11'), {
 	sip_trunk_password => undef,
 }, "SIM still exists before deletion");
 
+is(normalize_phonenumber("31612345678"), "31612345678", "Normalize normal phone number");
+is(normalize_phonenumber("31-6-12345678"), "31612345678", "Normalize phone number with dashes");
+is(normalize_phonenumber("0031612345678"), "31612345678", "Normalize phone number with 00316 prefix");
+is(normalize_phonenumber("0612345678"), "31612345678", "Normalize phone number with 06 prefix");
+is(normalize_phonenumber("06 12345678"), "31612345678", "Normalize phone number with 06 prefix and spaces");
+is(normalize_phonenumber("0031 6 1234 5678"), "31612345678", "Normalize phone number with 00316 prefix and spaces");
+is(normalize_phonenumber("+316 12345678"), "31612345678", "Normalize phone number with +316 prefix");
+
+undef $exception;
+try {
+	normalize_phonenumber("316123456789");
+} catch {
+	$exception = $_ || 1;
+};
+ok($exception, "Too long a phonenumber threw");
+
+undef $exception;
+try {
+	normalize_phonenumber("3161234567");
+} catch {
+	$exception = $_ || 1;
+};
+ok($exception, "Too short a phonenumber threw");
+
+undef $exception;
+try {
+	normalize_phonenumber("31512345678");
+} catch {
+	$exception = $_ || 1;
+};
+ok($exception, "Not a mobile phonenumber threw");
+
+undef $exception;
+try {
+	normalize_phonenumber("32612345678");
+} catch {
+	$exception = $_ || 1;
+};
+ok($exception, "Not a Dutch mobile phonenumber threw");
+
 undef $exception;
 my $pn;
 try {
@@ -331,7 +371,7 @@ is_deeply([list_phonenumbers($lim, "89310105029090284384")], [], "list_phonenumb
 is_deeply([list_phonenumbers($lim, "2014-03-09")], [], "list_phonenumbers gives empty with wrong date");
 undef $exception;
 try {
-	delete_phonenumber($lim, "31612345678", "2014-03-12");
+	delete_phonenumber($lim, "06-12345678", "2014-03-12");
 } catch {
 	$exception = $_ || 1;
 };

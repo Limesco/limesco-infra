@@ -151,6 +151,23 @@ sub sim_changes_between {
 	object_changes_between($lim, _sim_object_info(), $sim_iccid, $startdate, $enddate);
 }
 
+=head3 normalize_phonenumber($phonenumber)
+
+Take a free-form phonenumber, and return a normalized one. If it's not a
+correct phonenumber, die().
+
+=cut
+
+sub normalize_phonenumber {
+	my ($phonenumber) = @_;
+	$phonenumber =~ s/[- ]+//g;
+	if($phonenumber =~ /^(?:\+?31|\+?0031|0)6(\d{8})$/) {
+		return "316$1";
+	} else {
+		die "Did not recognize phone number: $phonenumber";
+	}
+}
+
 =head3 create_phonenumber($lim | $dbh, $phonenumber, $sim_iccid, [$date])
 
 Create a phone number. $date is the optional starting date of the SIM; if not
@@ -164,9 +181,7 @@ something failed.
 
 sub create_phonenumber {
 	my ($lim, $phonenumber, $sim_iccid, $date) = @_;
-	if($phonenumber =~ /^06-?(\d+)$/) {
-		$phonenumber = "316$1";
-	}
+	$phonenumber = normalize_phonenumber($phonenumber);
 	return create_object($lim, _phonenumber_object_info(),
 		{phonenumber => $phonenumber, sim_iccid => $sim_iccid},
 		$date);
@@ -181,6 +196,7 @@ information on the given date.
 
 sub get_phonenumber {
 	my ($lim, $phonenumber, $date) = @_;
+	$phonenumber = normalize_phonenumber($phonenumber);
 	return get_object($lim, _phonenumber_object_info(), $phonenumber, $date);
 }
 
@@ -231,6 +247,7 @@ number belongs to: you must check this yourself.
 
 sub delete_phonenumber {
 	my ($lim, $phonenumber, $date) = @_;
+	$phonenumber = normalize_phonenumber($phonenumber);
 	delete_object($lim, _phonenumber_object_info(), $phonenumber, $date);
 }
 
@@ -248,6 +265,7 @@ changes to the given phonenumber before 2014-03-01, including changes done on
 
 sub phonenumber_changes_between {
 	my ($lim, $phonenumber, $startdate, $enddate) = @_;
+	$phonenumber = normalize_phonenumber($phonenumber);
 	object_changes_between($lim, _phonenumber_object_info(), $phonenumber, $startdate, $enddate);
 }
 
