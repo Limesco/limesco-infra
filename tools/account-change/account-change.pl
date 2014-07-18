@@ -110,16 +110,17 @@ sub update_account {
 	return update_object($lim, _account_object_info(), $account_id, $changes, $date);
 }
 
-=head3 delete_account($lim | $dbh, $account_id, [$date])
+=head3 delete_account($lim | $dbh, $account_id, [$date, [$force]])
 
 Delete an account. $date is the optional date of deletion; if not given,
-'today' is assumed.
+'today' is assumed. If $force is true, allow deleting the account even though
+$date is a historic record (i.e. delete future changes too).
 
 =cut
 
 sub delete_account {
-	my ($lim, $account_id, $date) = @_;
-	delete_object($lim, _account_object_info(), $account_id, $date);
+	my ($lim, $account_id, $date, $force) = @_;
+	delete_object($lim, _account_object_info(), $account_id, $date, $force);
 }
 
 =head3 account_changes_between($lim | $dbh, $account_id, [$startdate, [$enddate]])

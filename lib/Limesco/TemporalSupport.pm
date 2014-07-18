@@ -278,15 +278,16 @@ sub update_object {
 	};
 }
 
-=head3 delete_object($lim | $dbh, $object_info, $object_id, [$date])
+=head3 delete_object($lim | $dbh, $object_info, $object_id, [$date, [$force]])
 
 Delete an object. $date is the optional date of deletion; if not given,
-'today' is assumed.
+'today' is assumed. If $force is true, allow deleting the object even though
+$date is a historic record (i.e. delete future changes too).
 
 =cut
 
 sub delete_object {
-	my ($lim, $object_info, $object_id, $date) = @_;
+	my ($lim, $object_info, $object_id, $date, $force) = @_;
 	$date ||= 'today';
 
 	my $dbh_is_mine = ref($lim) eq "Limesco";
@@ -299,11 +300,16 @@ sub delete_object {
 		my $primary_key = $object_info->{'primary_key'};
 
 		$dbh->do("LOCK TABLE $table_name;");
-		my $sth = $dbh->prepare("SELECT $primary_key, period, lower(period) AS old_date, ?::date AS new_date FROM $table_name WHERE $primary_key=? AND upper(period) IS NULL AND period @> ?::date");
+		my $sth = $dbh->prepare("SELECT $primary_key, period, lower(period) AS old_date, upper(period) AS propagate_date, ?::date AS new_date FROM $table_name WHERE $primary_key=? AND period @> ?::date");
 		$sth->execute($date, $object_id, $date);
 		my $old_object = $sth->fetchrow_hashref;
 		if(!$old_object) {
-			die "Cannout change object $object_id at date $date, doesn't exist or it is already historical";
+			die "Cannot delete object $object_id at date $date, doesn't exist or is deleted here";
+		}
+
+		my $propagate_date = $old_object->{'propagate_date'};
+		if(defined($propagate_date) && !$force) {
+			die "Cannot delete object $object_id at date $date, record is historical and force is not enabled";
 		}
 
 		# If the new date overwrites the last period, delete the row, otherwise update it
@@ -318,6 +324,12 @@ sub delete_object {
 
 		if(!$changed_rows) {
 			die "Failed to delete object $object_id, even though it existed";
+		}
+
+		# if we changed a historical record, delete future records too
+		if(defined($propagate_date)) {
+			my $sth = $dbh->prepare("DELETE FROM $table_name WHERE $primary_key=? AND lower(period) >= ?::date");
+			$sth->execute($old_object->{$primary_key}, $propagate_date);
 		}
 
 		$dbh->commit if $dbh_is_mine;

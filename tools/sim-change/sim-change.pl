@@ -122,16 +122,17 @@ sub update_sim {
 	return update_object($lim, _sim_object_info(), $sim_iccid, $changes, $date);
 }
 
-=head3 delete_sim($lim | $dbh, $sim_iccid, [$date])
+=head3 delete_sim($lim | $dbh, $sim_iccid, [$date, [$force]])
 
 Delete a SIM. $date is the optional date of deletion; if not given, 'today' is
-assumed.
+assumed. If $force is true, allow deleting the SIM even though
+$date is a historic record (i.e. delete future changes too).
 
 =cut
 
 sub delete_sim {
-	my ($lim, $sim_iccid, $date) = @_;
-	delete_object($lim, _sim_object_info(), $sim_iccid, $date);
+	my ($lim, $sim_iccid, $date, $force) = @_;
+	delete_object($lim, _sim_object_info(), $sim_iccid, $date, $force);
 }
 
 =head3 sim_changes_between($lim | $dbh, $sim_iccid, [$startdate, [$enddate]])
@@ -237,18 +238,20 @@ sub list_phonenumbers {
 	}
 }
 
-=head3 delete_phonenumber($lim | $dbh, $phonenumber, [$date])
+=head3 delete_phonenumber($lim | $dbh, $phonenumber, [$date, [$force]])
 
 Delete a phone number from a SIM. $date is the optional date of deletion; if
-not given, 'today' is assumed. This method does not check what ICCID a phone
-number belongs to: you must check this yourself.
+not given, 'today' is assumed.  If $force is true, allow deleting the phone
+number even though $date is a historic record (i.e. delete future changes too).
+This method does not check what ICCID a phone number belongs to: you must check
+this yourself.
 
 =cut
 
 sub delete_phonenumber {
-	my ($lim, $phonenumber, $date) = @_;
+	my ($lim, $phonenumber, $date, $force) = @_;
 	$phonenumber = normalize_phonenumber($phonenumber);
-	delete_object($lim, _phonenumber_object_info(), $phonenumber, $date);
+	delete_object($lim, _phonenumber_object_info(), $phonenumber, $date, $force);
 }
 
 =head3 phonenumber_changes_between($lim | $dbh, $phonenumber, [$startdate, [$enddate]])

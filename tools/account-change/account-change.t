@@ -12,7 +12,7 @@ use Try::Tiny;
 use POSIX 'strftime';
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 86;
+plan tests => 94;
 
 require_ok("account-change.pl");
 
@@ -567,25 +567,6 @@ is_deeply(get_account($lim, $account_id), {
 	admin => 0,
 }, "Street name changed");
 
-# Try to delete an account in history
-$exception = undef;
-try {
-	delete_account($lim, $account_id, '2014-01-01');
-} catch {
-	$exception = $_ || 1;
-};
-
-ok($exception, "Exception thrown when trying to delete account in history");
-
-$exception = undef;
-try {
-	delete_account($lim, $account_id, '2014-03-11');
-} catch {
-	$exception = $_ || 1;
-};
-
-ok($exception, "Exception thrown when trying to delete account in history");
-
 $exception = undef;
 try {
 	delete_account($lim, $account_id, '2014-03-12');
@@ -725,5 +706,75 @@ is(get_account($lim, $account->{'id'}, '2014-06-07')->{'last_name'},
 	"Last Name", "Last name is OK");
 is(get_account($lim, $account->{'id'}, '2014-06-09')->{'last_name'},
 	"Last Name", "Last name is OK");
+
+$exception = undef;
+try {
+	delete_account($lim, $account->{'id'}, '2014-01-01');
+} catch {
+	$exception = $_ || 1;
+};
+
+ok($exception, "Exception thrown when trying to delete account before it existed without force");
+is(get_account($lim, $account->{'id'}, '2014-06-09')->{'company_name'},
+	"Company After Third Change", "Third company name is still OK");
+
+$exception = undef;
+try {
+	delete_account($lim, $account->{'id'}, '2014-06-08');
+} catch {
+	$exception = $_ || 1;
+};
+
+ok($exception, "Exception thrown when trying to delete account in history without force");
+is(get_account($lim, $account->{'id'}, '2014-06-09')->{'company_name'},
+	"Company After Third Change", "Third company name is still OK");
+
+$exception = undef;
+try {
+	delete_account($lim, $account->{'id'}, '2014-01-01', 'force');
+} catch {
+	$exception = $_ || 1;
+};
+
+ok($exception, "Exception thrown when trying to delete account before it existed with force");
+is(get_account($lim, $account->{'id'}, '2014-06-09')->{'company_name'},
+	"Company After Third Change", "Third company name is still OK");
+
+$exception = undef;
+try {
+	delete_account($lim, $account->{'id'}, '2014-06-07', 'force');
+} catch {
+	$exception = $_ || 1;
+};
+
+diag($exception) if $exception;
+ok(!$exception, "No exception thrown when trying to delete account in history with force");
+is_deeply(get_account($lim, $account->{'id'}, '2014-06-06'), {
+	id => $account->{'id'},
+	company_name => "Company After Change",
+	first_name => "First Name After Change",
+	last_name => "Last Name",
+	street_address => "Street Address",
+	postal_code => "Postal Code",
+	city => "City",
+	email => 'testemail@limesco.nl',
+	password_hash => "",
+	admin => 0,
+	period => '[2014-06-05,2014-06-07)',
+}, "Account is still OK before forced deletion");
+$exception = undef;
+try {
+	get_account($lim, $account->{'id'}, '2014-06-07');
+} catch {
+	$exception = $_ || 1;
+};
+ok($exception, "Exception thrown when retrieving account after delete in history");
+$exception = undef;
+try {
+	get_account($lim, $account->{'id'}, '2014-06-10');
+} catch {
+	$exception = $_ || 1;
+};
+ok($exception, "Exception thrown when retrieving account after propagated delete in history");
 
 $dbh->disconnect;
