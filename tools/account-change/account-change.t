@@ -721,9 +721,9 @@ is(get_account($lim, $account->{'id'}, '2014-06-03')->{'last_name'},
 	"Last Name", "Last name is OK");
 is(get_account($lim, $account->{'id'}, '2014-06-05')->{'last_name'},
 	"Last Name", "Last name is OK");
-is(get_account($lim, $account->{'id'}, '2014-06-05')->{'last_name'},
+is(get_account($lim, $account->{'id'}, '2014-06-07')->{'last_name'},
 	"Last Name", "Last name is OK");
-is(get_account($lim, $account->{'id'}, '2014-06-05')->{'last_name'},
+is(get_account($lim, $account->{'id'}, '2014-06-09')->{'last_name'},
 	"Last Name", "Last name is OK");
 
 $dbh->disconnect;
