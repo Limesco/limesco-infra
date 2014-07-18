@@ -40,10 +40,10 @@ $dbh->do("INSERT INTO invoice (id, account_id, date, creation_time, rounded_with
 
 my $sth = $dbh->prepare("INSERT INTO invoice_itemline (type, invoice_id, description, taxrate,
 	rounded_total, base_amount, item_price, item_count, number_of_calls, number_of_seconds,
-	price_per_call, price_per_minute) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+	price_per_call, price_per_minute, service) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
 
 $sth->execute('NORMAL', $invoice_id, 'Invoice Itemline Description', 0.26,
-	13.37, undef, 10.61, 1, undef, undef, undef, undef);
+	13.37, undef, 10.61, 1, undef, undef, undef, undef, "VOICE");
 
 is_deeply([list_invoices($lim, $account_id)], [{
 	id => $invoice_id,
@@ -68,6 +68,7 @@ is_deeply([list_invoices($lim, $account_id)], [{
 		number_of_seconds => undef,
 		price_per_call => undef,
 		price_per_minute => undef,
+		service => "VOICE",
 	}],
 }], "One invoice for account");
 
