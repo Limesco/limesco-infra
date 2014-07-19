@@ -51,6 +51,16 @@ sub _account_object_info {
 	};
 }
 
+# and the same for temporal speakup account changes
+sub _speakup_account_object_info {
+	return {
+		# The fields without which a speakup account may not be created
+		required_fields => [qw(name account_id)],
+		table_name => "speakup_account",
+		primary_key => "name",
+	};
+}
+
 =head3 create_account($lim | $dbh, $account, [$date])
 
 Create an account. $date is the optional starting date of the account; if not
@@ -138,6 +148,104 @@ changes to the given account ID before 2014-03-01, including changes done on
 sub account_changes_between {
 	my ($lim, $account_id, $startdate, $enddate) = @_;
 	object_changes_between($lim, _account_object_info(), $account_id, $startdate, $enddate);
+}
+
+=head3 link_speakup_account($lim | $dbh, $speakup_account, $account_id, [$date])
+
+Link a speakup account to a liminfra account. $date is the optional starting
+date of the link; if not given, 'today' is assumed. $account_id must point to a
+valid account at the given date.
+
+This method returns the newly created speakup account, or throws an exception
+if something failed.
+
+=cut
+
+sub link_speakup_account {
+	my ($lim, $speakup_account, $account_id, $date) = @_;
+	return create_object($lim, _speakup_account_object_info(),
+		{name => $speakup_account, account_id => $account_id},
+		$date);
+}
+
+=head3 get_speakup_account($lim | $dbh, $speakup_account, [$date])
+
+Retrieve speakup account information. If $date is given, retrieve speakup
+account information on the given date.
+
+=cut
+
+sub get_speakup_account {
+	my ($lim, $speakup_account, $date) = @_;
+	return get_object($lim, _speakup_account_object_info(), $speakup_account, $date);
+}
+
+=head3 list_speakup_accounts($lim | $dbh, [$account_id, [$date]])
+
+Retrieve a list of speakup accounts active on the given $date. If $date is not
+given, only speakup accounts active 'today' are returned. If an $account_id is
+given, filter out speakup accounts belonging to the given account.
+
+=cut
+
+sub list_speakup_accounts {
+	my ($lim, $arg1, $arg2) = @_;
+	my ($id, $date);
+	if($arg1) {
+		if($arg1 =~ /^20\d\d-\d\d-\d\d$/ || $arg1 eq "today") {
+			$date = $arg1;
+		} elsif($arg1 =~ /^\d+$/) {
+			$id = $arg1;
+		} else {
+			die "Didn't understand parameter: $arg1\n";
+		}
+	}
+	if($arg2) {
+		if(!$date && ($arg2 =~ /^20\d\d-\d\d-\d\d$/ || $arg2 eq "today")) {
+			$date = $arg2;
+		} else {
+			die "Didn't understand parameter: $arg2\n";
+		}
+	}
+	# TODO: add a WHERE clause
+	my @objects = list_objects($lim, _speakup_account_object_info(), $date);
+	if($id) {
+		return grep { $_->{'account_id'} eq $id } @objects;
+	} else {
+		return @objects;
+	}
+}
+
+=head3 unlink_speakup_account($lim | $dbh, $speakup_account, [$date, [$force]])
+
+Unlink a speakup account from an account. $date is the optional date of
+unlinking; if not given, 'today' is assumed.  If $force is true, allow deleting
+the speakup account even though $date is a historic record (i.e. delete future
+changes too).  This method does not check what account ID a speakup account
+belongs to: you must check this yourself.
+
+=cut
+
+sub unlink_speakup_account {
+	my ($lim, $speakup_account, $date, $force) = @_;
+	delete_object($lim, _speakup_account_object_info(), $speakup_account, $date, $force);
+}
+
+=head3 speakup_account_changes_between($lim | $dbh, $speakup_account, [$startdate, [$enddate]])
+
+Retrieve the changes done between two dates, INCLUSIVE. If the same date is
+given for $startdate and $enddate, return the change on that date if there was
+one.  'undef' can be given instead of either of the two variables to mean
+"infinitely in that direction" or instead of both to mean "infinitely". For
+example, giving a startdate of undef and an enddate of '2014-03-01' means all
+changes to the given speakup_account before 2014-03-01, including changes done
+on 2014-03-01.
+
+=cut
+
+sub speakup_account_changes_between {
+	my ($lim, $speakup_account, $startdate, $enddate) = @_;
+	object_changes_between($lim, _speakup_account_object_info(), $speakup_account, $startdate, $enddate);
 }
 
 1;

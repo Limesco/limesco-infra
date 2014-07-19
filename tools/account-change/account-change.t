@@ -12,7 +12,7 @@ use Try::Tiny;
 use POSIX 'strftime';
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 94;
+plan tests => 104;
 
 require_ok("account-change.pl");
 
@@ -776,5 +776,48 @@ try {
 	$exception = $_ || 1;
 };
 ok($exception, "Exception thrown when retrieving account after propagated delete in history");
+
+## Speakup accounts
+$account = create_account($lim, {
+	company_name => "Company Name",
+	first_name => "First Name",
+	last_name => "Last Name",
+	street_address => "Street Address",
+	postal_code => "Postal Code",
+	city => "City",
+	email => 'testemail@limesco.nl',
+	password_hash => "",
+	admin => 0,
+}, '2014-07-01');
+
+undef $exception;
+my $su;
+try {
+	$su = link_speakup_account($lim, "testaccount", $account->{'id'}, "2014-07-04");
+} catch {
+	$exception = $_ || 1;
+};
+
+ok(!$exception, "No exception thrown while linking speakup account");
+ok($su, "Speakup account created");
+is_deeply($su, {
+	name => "testaccount",
+	account_id => $account->{'id'},
+	period => "[2014-07-04,)",
+}, "Speakup account created correctly");
+is_deeply(get_speakup_account($lim, "testaccount", "2014-07-04"), $su, "Retrieved speakup account is the same");
+is_deeply([list_speakup_accounts($lim)], [$su], "list_speakup_accounts returns speakup account");
+is_deeply([list_speakup_accounts($lim, $account->{'id'})], [$su], "list_speakup_accounts returns speakup account");
+is_deeply([list_speakup_accounts($lim, $account->{'id'} - 1)], [], "list_speakup_accounts gives empty with wrong account ID");
+is_deeply([list_speakup_accounts($lim, "2014-07-03")], [], "list_speakup_accounts gives empty with wrong date");
+undef $exception;
+try {
+	unlink_speakup_account($lim, "testaccount", "2014-07-05");
+} catch {
+	$exception = $_ || 1;
+};
+
+ok(!$exception, "No exception thrown while deleting speakup account");
+is_deeply([list_speakup_accounts($lim, $account->{'id'}, "2014-07-05")], [], "list_speakup_accounts adhers end date");
 
 $dbh->disconnect;
