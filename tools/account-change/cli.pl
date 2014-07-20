@@ -116,15 +116,15 @@ sub run_account {
 	delete $self->{account};
 	delete $self->{sim};
 
-	if($search =~ /^\d+$/) {
-		$self->{account} = $self->{lim}->get_account($search);
-	} else {
-		try {
+	try {
+		if($search =~ /^\d+$/) {
+			$self->{account} = $self->{lim}->get_account($search);
+		} else {
 			$self->{account} = $self->{lim}->get_account_like($search);
-		} catch {
-			warn $_;
-		};
-	}
+		}
+	} catch {
+		warn $_;
+	};
 }
 
 sub help_account {
