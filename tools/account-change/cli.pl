@@ -544,6 +544,67 @@ sub smry_invoice {
 	return "dump an invoice or a list of invoices";
 }
 
+sub run_speakup_account {
+	my ($self, $command, $name, $date) = @_;
+
+	if(!$self->{'account'}) {
+		warn "Can only use the 'speakup_account' command when an account is selected.\n";
+		return;
+	}
+
+	if(!$command || $command eq "list") {
+		my $dbh = $self->{lim}->get_database_handle();
+		my $sth = $dbh->prepare("SELECT name, period FROM speakup_account WHERE account_id=? ORDER BY period");
+		$sth->execute($self->{'account'}{'id'});
+		while(my $row = $sth->fetchrow_hashref()) {
+			my $spaces = ' ' x (14 - length($row->{'name'}));
+			printf("  %s%s (%s)\n", $row->{'name'}, $spaces, format_period($row->{'period'}));
+		}
+	} elsif($command eq "link" || $command eq "unlink") {
+		if($name && $date) {
+			# use the given ones
+		} elsif(!$name && !$date) {
+			my $add = $command eq "link" ? "link" : "unlink";
+			$name = ask_question("What speakup account name to $add?");
+			my $activated = $command eq "link" ? "linked" : "unlinked";
+			$date = ask_date_or_today("On what date will the speakup account be $activated?");
+		} else {
+			warn help_speakup_account();
+			return;
+		}
+
+		try {
+			if($command eq "link") {
+				::link_speakup_account($lim, $name, $self->{'account'}{'id'}, $date);
+			} else {
+				::unlink_speakup_account($lim, $name, $date);
+			}
+		} catch {
+			warn $_;
+		};
+	} else {
+		warn help_speakup_account();
+		return;
+	}
+}
+
+sub help_speakup_account {
+	return <<HELP;
+speakup_account [list]
+speakup_account link [<name> <date>]
+speakup_account unlink [<name> <date>]
+
+List speakup accounts, link one to an account, or unlink one from an account.
+If no parameters are given to link or unlink, the command asks interactively.
+'today' is allowed as the date.
+HELP
+}
+
+sub smry_speakup_account {
+	return "view, link or unlink speakup accounts to liminfra accounts";
+}
+
+
 sub run_phonenumber {
 	my ($self, $command, $number, $date) = @_;
 
