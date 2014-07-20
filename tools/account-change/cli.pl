@@ -904,3 +904,91 @@ HELP
 sub smry_commit {
 	return "commit prepared changes";
 }
+
+sub run_delete {
+	my ($self, $date) = @_;
+
+	if(!$date) {
+		warn help_delete();
+		return;
+	}
+
+	if($self->{queued_changes}) {
+		warn "Cannot delete object when changes are queued. Use 'commit' or 'rollback' first.\n";
+		return;
+	}
+
+	if(!$self->{'account'}) {
+		warn "Can only delete when an object is selected.\n";
+		return;
+	}
+
+	my @changes;
+
+	if($self->{'sim'}) {
+		@changes = ::sim_changes_between($self->{'lim'}, $self->{'sim'}{'iccid'}, $date);
+	} else {
+		@changes = ::account_changes_between($self->{'lim'}, $self->{'account'}{'id'}, $date);
+	}
+
+	my $force;
+	if(@changes > 0) {
+		print "The date you selected is historic for this object. The following changes appear\n";
+		print "at or after this date:\n";
+		print "\n";
+		for(0..$#changes) {
+			if($_ == 3) {
+				print "...and " . (@changes-$_) . " more (see 'changes' to see them).\n";
+				last;
+			}
+
+			my $changeset = $changes[$_];
+			my $period = delete $changeset->{'period'};
+			my ($startdate) = $period =~ /^(?:\(|\[)(\d{4}-\d\d-\d\d)?,.*\)$/;
+			if(!$startdate) {
+				die "Couldn't parse period: $period\n";
+			}
+
+			print "$startdate:";
+			print " (no actual changes)\n" if keys %$changeset == 0;
+			print "\n" if keys %$changeset > 1;
+			foreach my $key (keys %$changeset) {
+				my $value = $changeset->{$key};
+				$value = "(undef)" if(!defined($value));
+				print "  $key => $value\n";
+			}
+		}
+		print STDERR "Sure to LOSE the changes above and DELETE this object? ('yes' or 'no'): ";
+		$force = 1;
+	} else {
+		print STDERR "Sure to DELETE this object? ('yes' or 'no'): ";
+	}
+
+	my $yesno = <STDIN>;
+	1 while chomp $yesno;
+	if($yesno ne 'yes') {
+		print STDERR "Cancelled.\n";
+		return;
+	}
+
+	if($self->{'sim'}) {
+		::delete_sim($self->{'lim'}, $self->{'sim'}{'iccid'}, $date, $force);
+		delete $self->{'sim'};
+	} else {
+		::delete_account($self->{'lim'}, $self->{'account'}{'id'}, $date, $force);
+		delete $self->{'account'};
+	}
+}
+
+sub help_delete {
+	return <<HELP;
+delete <date>
+
+Delete the selected object (account or SIM). You must give a date (or 'today') when the
+changes become effective.
+HELP
+}
+
+sub smry_delete {
+	return "delete selected object";
+}
