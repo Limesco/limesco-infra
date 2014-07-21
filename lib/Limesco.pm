@@ -66,6 +66,8 @@ sub email_config {
 	}
 
 	my $em = $self->{'config'}{'email'};
+	delete $em->{'from'};
+	delete $em->{'replyto'};
 
 	my @allowed_keys = qw/from_name from_address replyto_name
 		replyto_address blind_cc smtp_host smtp_port/;
@@ -79,6 +81,7 @@ sub email_config {
 			$config_ok = 0;
 		}
 	}
+
 	foreach my $key (@keys) {
 		if(!grep { $key eq $_ } @allowed_keys) {
 			warn "Unknown variable in e-mail configuration: $key\n";
