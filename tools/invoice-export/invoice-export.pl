@@ -253,8 +253,9 @@ sub send_invoice_by_email {
 	if(!$accountname) {
 		$accountname = $account->{'first_name'} . " " . $account->{'last_name'};
 	}
-	$accountname =~ s/\s/_/g;
-	my $filename = sprintf "%s-%s.pdf", $accountname, $invoice->{'id'};
+	my $fn_accountname = $accountname;
+	$fn_accountname =~ s/\s/_/g;
+	my $filename = sprintf "%s-%s.pdf", $fn_accountname, $invoice->{'id'};
 
 	# This is a dirty hack to generate a Bitcoin URL. Because of an OpenSSL interface
 	# difference, tokens encoded using Perl could not be decoded using the PHP payment end.
