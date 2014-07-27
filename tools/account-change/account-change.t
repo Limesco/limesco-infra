@@ -12,7 +12,7 @@ use Try::Tiny;
 use POSIX 'strftime';
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 104;
+plan tests => 105;
 
 require_ok("account-change.pl");
 
@@ -819,5 +819,49 @@ try {
 
 ok(!$exception, "No exception thrown while deleting speakup account");
 is_deeply([list_speakup_accounts($lim, $account->{'id'}, "2014-07-05")], [], "list_speakup_accounts adhers end date");
+
+### Regression test: object_changes_between must not break if a historic
+### period was changed. It did, because it had no ORDER BY period ASC, so
+### it retrieved an older row after a newer one.
+$account = create_account($lim, {
+	company_name => "Test Company Name",
+	first_name => "Test First Name",
+	last_name => "Test Last Name",
+	street_address => "Test Street Address",
+	postal_code => "Test Postal Code",
+	city => "Test City",
+	email => 'testemail@limesco.nl',
+	password_hash => "",
+	admin => 0,
+}, '2014-08-01');
+# This creates a new record 2014-08-05:
+update_account($lim, $account->{'id'}, {
+	street_address => "Test Street Address 2",
+	company_name => "Test Company Name 2",
+}, "2014-08-05");
+# This only modifies the record at 2014-08-01:
+update_account($lim, $account->{'id'}, {
+	street_address => "Test Street Address 2",
+}, "2014-08-01");
+# The record at 2014-08-01 is now 'newer' than the record at 2014-08-05 as far
+# as PostgreSQL is concerned. account_changes_between should not be fooled by
+# this, though:
+is_deeply([account_changes_between($lim, $account->{'id'}, '2014-08-01')], [
+{
+	id => $account->{'id'},
+	period => '[2014-08-01,2014-08-05)',
+	company_name => "Test Company Name",
+	first_name => "Test First Name",
+	last_name => "Test Last Name",
+	street_address => "Test Street Address 2",
+	postal_code => "Test Postal Code",
+	city => "Test City",
+	email => 'testemail@limesco.nl',
+	password_hash => "",
+	admin => 0,
+}, {
+	period => '[2014-08-05,)',
+	company_name => "Test Company Name 2",
+}], "After changing the first row, ordering and contents of object_changes_between is still OK");
 
 $dbh->disconnect;

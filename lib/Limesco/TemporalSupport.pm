@@ -375,7 +375,9 @@ sub object_changes_between {
 			# select all records that fall between a slightly wider daterange than given
 			# this makes sure if the startdate is the date of the change, we also receive
 			# the record right before it (and vice versa for enddate)
-			."period && daterange((?::date - '1 day'::interval)::date, (?::date + '1 day'::interval)::date)");
+			."period && daterange((?::date - '1 day'::interval)::date, (?::date + '1 day'::interval)::date)"
+			# return results in chronological order
+			." ORDER BY period ASC");
 		$sth->execute($startdate, $enddate, $object_id, $startdate, $enddate);
 
 		my @rows_to_return;
