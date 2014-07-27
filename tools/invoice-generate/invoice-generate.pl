@@ -600,9 +600,11 @@ sub generate_invoice {
 		my $invoice_sum = 0;
 		# TODO: tax per taxrate
 		my $tax = 0;
+		my $taxrate;
 		foreach(@itemlines, @queued_itemlines) {
 			$invoice_sum += $_->{'rounded_total'};
 			$tax += $_->{'rounded_total'} * $_->{'taxrate'};
+			$taxrate = $_->{'taxrate'};
 		}
 
 		# Tax itemline
@@ -610,7 +612,7 @@ sub generate_invoice {
 			type => "TAX",
 			invoice_id => $invoice_id,
 			description => "Tax",
-			taxrate => $TAX_RATE,
+			taxrate => $taxrate,
 			base_amount => $invoice_sum,
 			rounded_total => $tax,
 			item_price => $tax,
