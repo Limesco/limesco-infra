@@ -12,7 +12,7 @@ use Try::Tiny;
 use DateTime;
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 22;
+plan tests => 30;
 
 require_ok("invoice-generate.pl");
 
@@ -100,5 +100,109 @@ try {
 diag($exception) if $exception;
 ok(!$exception, "No exception thrown during generation of invoice");
 ok(!defined($invoice), "Invoice was empty");
+
+### add_queued_itemline
+
+undef $exception;
+try {
+	add_queued_itemline($lim, {
+		type => "NORMAL",
+		queued_for_account_id => $account->{'id'},
+		description => "Test queued itemline",
+		taxrate => 0.50,
+		rounded_total => 1.50,
+		item_price => 1.50,
+		item_count => 1,
+	});
+} catch {
+	$exception = $_ || 1;
+};
+
+diag($exception) if $exception;
+ok(!$exception, "No exception thrown while adding queued itemline");
+
+undef $invoice;
+undef $exception;
+try {
+	$invoice = generate_invoice($lim, $account->{'id'}, dt('2014', '08', '15'));
+} catch {
+	$exception = $_ || 1;
+};
+
+diag($exception) if $exception;
+ok(!$exception, "No exception thrown during generation of invoice");
+is($invoice, "14C000001", "Invoice was correctly generated");
+
+undef $exception;
+try {
+	my $sth = $dbh->prepare("SELECT * FROM invoice WHERE id='14C000001'");
+	$sth->execute;
+	$invoice = $sth->fetchrow_hashref;
+} catch {
+	$exception = $_ || 1;
+};
+
+ok(!$exception, "Invoice could be retrieved");
+is_deeply($invoice, {
+	id => "14C000001",
+	account_id => $account->{'id'},
+	currency => "EUR",
+	date => "2014-08-15",
+	creation_time => $invoice->{'creation_time'},
+	rounded_without_taxes => '1.50',
+	rounded_with_taxes => '2.25',
+}, "Invoice created correctly");
+
+undef $exception;
+my $itemline;
+my $taxline;
+try {
+	my $sth = $dbh->prepare("SELECT * FROM invoice_itemline WHERE invoice_id='14C000001' ORDER BY type");
+	$sth->execute;
+	$itemline = $sth->fetchrow_hashref;
+	$taxline = $sth->fetchrow_hashref;
+	if($sth->fetchrow_hashref) {
+		die "More than two itemlines on the invoice";
+	}
+} catch {
+	$exception = $_ || 1;
+};
+
+ok(!$exception, "No exception thrown while retrieving invoice itemlines");
+is_deeply($itemline, {
+	id => $itemline->{'id'},
+	type => "NORMAL",
+	queued_for_account_id => undef,
+	invoice_id => '14C000001',
+	description => "Test queued itemline",
+	taxrate => '0.50000000',
+	rounded_total => '1.50',
+	base_amount => undef,
+	item_price => '1.50000000',
+	item_count => 1,
+	number_of_calls => undef,
+	number_of_seconds => undef,
+	price_per_call => undef,
+	price_per_minute => undef,
+	service => undef,
+}, "Itemline is OK");
+
+is_deeply($taxline, {
+	id => $taxline->{'id'},
+	type => "TAX",
+	queued_for_account_id => undef,
+	invoice_id => '14C000001',
+	description => "Tax",
+	taxrate => '0.50000000',
+	rounded_total => '0.75',
+	base_amount => '1.50000000',
+	item_price => '0.75000000',
+	item_count => 1,
+	number_of_calls => undef,
+	number_of_seconds => undef,
+	price_per_call => undef,
+	price_per_minute => undef,
+	service => undef,
+}, "Tax line is OK");
 
 $dbh->disconnect();

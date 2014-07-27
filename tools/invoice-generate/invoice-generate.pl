@@ -644,4 +644,42 @@ sub generate_invoice {
 	# TODO: Dump information on unpriced CDRs
 }
 
+=head3 add_queued_itemline($lim, $itemline)
+
+Add a queued itemline for an account. The 'queued_for_account_id' member in
+itemline must be set, the 'invoice_id' must not be set, and it must be a valid
+itemline. If the method does not throw, the itemline will be included on the
+next invoice for the given account ID.
+
+=cut
+
+sub add_queued_itemline {
+	my ($lim, $itemline) = @_;
+	my $dbh = $lim->get_database_handle();
+
+	if(!$itemline->{'queued_for_account_id'}) {
+		die "add_queued_itemline but no queued_for_account_id given";
+	}
+	if($itemline->{'id'}) {
+		die "add_queued_itemline but an ID was already given";
+	}
+	if($itemline->{'invoice_id'}) {
+		die "add_queued_itemline but an invoice ID was already given";
+	}
+
+	my @keys = keys %$itemline;
+	foreach(@keys) {
+		if(!/^[a-z_]+$/) {
+			die "Invalid itemline key: $_\n";
+		}
+	}
+
+	# the database will check the rest of the itemline validity
+	my $keys = join ", ", @keys;
+	my $placeholders = join ", ", (('?') x @keys);
+	my @values = map {$itemline->{$_}} @keys;
+	my $sth = $dbh->prepare("INSERT INTO invoice_itemline ($keys) VALUES ($placeholders);");
+	$sth->execute(@values);
+}
+
 1;
