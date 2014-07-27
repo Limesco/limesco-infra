@@ -17,6 +17,7 @@ use utf8;
 
 # get_account
 do '../account-change/account-change.pl' unless UNIVERSAL::can('main', "get_account");
+do '../sim-change/sim-change.pl' unless UNIVERSAL::can('main', "get_sim");
 do '../directdebit/directdebit.pl' unless UNIVERSAL::can("main", "generate_directdebit_authorization");
 
 =head1 letter-generate.pl
@@ -80,7 +81,7 @@ if(!caller) {
 		authorization => generate_directdebit_authorization($lim),
 		pwd => realpath(dirname($0)),
 		account => $account,
-		sim => $sim ? $lim->get_sim($sim) : undef,
+		sim => $sim ? get_sim($lim, $sim) : undef,
 		date => sprintf("%04d-%02d-%02d", $localtime[5] + 1900, $localtime[4] + 1, $localtime[3]),
 	};
 
