@@ -12,7 +12,7 @@ use Try::Tiny;
 use DateTime;
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 20;
+plan tests => 22;
 
 require_ok("invoice-generate.pl");
 
@@ -86,5 +86,19 @@ is(first_day_of_next_month(dt("2014", "12", "30"))->ymd, "2015-01-01", "2014-12-
 is(last_day_of_this_month(dt("2014", "02", "20"))->ymd, "2014-02-28", "2014-02-20 -> 2014-02-28");
 is(last_day_of_this_month(dt("2014", "02", "28"))->ymd, "2014-02-28", "2014-02-28 -> 2014-02-28");
 is(last_day_of_this_month(dt("2014", "12", "01"))->ymd, "2014-12-31", "2014-12-01 -> 2014-12-31");
+
+### Nothing to invoice: generate_invoice returns undef
+
+my $invoice;
+undef $exception;
+try {
+	$invoice = generate_invoice($lim, $account->{'id'}, dt('2014', '08', '15'));
+} catch {
+	$exception = $_ || 1;
+};
+
+diag($exception) if $exception;
+ok(!$exception, "No exception thrown during generation of invoice");
+ok(!defined($invoice), "Invoice was empty");
 
 $dbh->disconnect();
