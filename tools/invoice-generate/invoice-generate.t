@@ -27,7 +27,7 @@ sub dt {
 }
 
 my $sth = $dbh->prepare("INSERT INTO invoice (id, account_id, date, creation_time, rounded_without_taxes, rounded_with_taxes)"
-	." VALUES (?, 1, ?, 'now', 0, 0)");
+	." VALUES (?, 10, ?, 'now', 0, 0)");
 
 #### find_next_invoice_id
 
