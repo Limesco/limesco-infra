@@ -20,7 +20,7 @@ if(!caller) {
 	my $debug = 1;
 	my $format = "plain";
 	my $filename = "";
-	my $type = "invoice";
+	my $type = "raw";
 	my $lim = Limesco->new_from_args(\@ARGV, sub {
 		my ($args, $iref) = @_;
 		my $arg = $args->[$$iref];
@@ -43,7 +43,7 @@ if(!caller) {
 	);
 	$swift->parsefile($filename);
 	
-	print Dumper(@bankstatements);
+	print Dumper(@bankstatements) if ($type eq "raw");
 
 }
 
@@ -64,10 +64,13 @@ sub handle_bankstatement {
 	my $group_header = $bankstmt->first_child('GrpHdr');
 	$bank_statement->{message_id} = get_fc_text($group_header, 'MsgId');
 	$bank_statement->{creation_time} = get_fc_text($group_header, 'CreDtTm');
+	$bank_statement->{statements} = [];
+
+	push @bankstatements, $bank_statement;
 
 	my @statements = $bankstmt->get_xpath('Stmt');
 	foreach my $stm (@statements) {
-		process_statement ($stm);
+		push $bankstatements[$#bankstatements]->{statements}, process_statement ($stm);
 	}
 }
 
@@ -85,7 +88,7 @@ sub process_statement {
 	$stmt->{account}->{iban} = get_fc_text(get_fc(get_fc($statement, 'Acct'), 'Id'), 'IBAN');
 	$stmt->{account}->{currency} = get_fc_text(get_fc($statement, 'Acct'), 'Ccy');
 
-	push @bankstatements, $stmt;
+	return $stmt;
 }
 
 =head4 get_child_text ($element, $child_name)
