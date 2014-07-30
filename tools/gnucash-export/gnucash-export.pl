@@ -19,12 +19,12 @@ Usage: gnucash-export.pl [infra-options]
 This tool can be used to export GnuCash-compatible QIF files for invoices or
 direct-debit data.
 
---format   <format>                QIF or plain, defaults to plain (table-like)
---write-to <filename>              Write output to <filename>, defaults to stdout
---type     <invoice|direct-debit>  Invoices or direct-debit, defaults to invoice
---date     <+date|date>            Show <date> or prepend with + for <date> and
-                                   further, defaults to current month. Expects
-                                   the following format: YYYY-MM
+  --format   <format>                QIF or plain, defaults to plain (table-like)
+  --write-to <filename>              Write output to <filename>, defaults to stdout
+  --type     <invoice|direct-debit>  Invoices or direct-debit, defaults to invoice
+  --date     <+date|date>            Show <date> or prepend with + for <date> and
+                                     further, defaults to current month. Expects
+                                     the following format: YYYY-MM
 
 =cut
 
