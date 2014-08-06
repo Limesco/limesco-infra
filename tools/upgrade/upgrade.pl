@@ -586,7 +586,7 @@ database, it gives no information.
 sub remove_portingstate_from_sim {
 	my ($lim, $dbh) = @_;
 
-	$dbh->do("ALTER TABLE invoice_itemline DROP COLUMN porting_state;");
+	$dbh->do("ALTER TABLE sim DROP COLUMN porting_state;");
 	$dbh->do("DROP TYPE portingstate;");
 }
 
