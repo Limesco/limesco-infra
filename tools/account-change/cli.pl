@@ -653,6 +653,29 @@ sub smry_phonenumber {
 	return "view, add or remove phone numbers from SIMs";
 }
 
+sub cli_add_directdebit_authorization {
+	my ($self) = @_;
+
+	if(!$self->{'account'}) {
+		die "Must have an account selected to authorize it for directdebit\n";
+	}
+
+	local $SIG{INT} = sub { die "Interrupted\n" };
+	my $authorization_id = ask_question("Authorization ID?", sub {
+		if(length($_[0]) != 24) {
+			warn "Invalid authorization ID.\n";
+			undef $_[0];
+		}
+		return $_[0];
+	});
+	my $bank_account_name = ask_question("Bank account name?");
+	my $iban = ask_question("IBAN?");
+	my $bic = ask_question("BIC?");
+	my $date = ask_question("Signature date (YYYY-MM-DD)?");
+	return ::add_directdebit_account($lim, $self->{'account'}{'id'},
+		$authorization_id, $bank_account_name, $iban, $bic, $date);
+}
+
 sub run_directdebit {
 	my ($self, $command) = @_;
 
@@ -672,27 +695,11 @@ sub run_directdebit {
 	} elsif($command eq "generate") {
 		print "New authorization ID: " . ::generate_directdebit_authorization($lim) . "\n";
 	} elsif($command eq "authorize") {
-		if(!$self->{'account'}) {
-			warn "Must have an account selected to see its directdebit info\n";
-			return;
-		}
-		my $authorization_id = ask_question("Authorization ID?", sub {
-			if(length($_[0]) != 24) {
-				warn "Invalid authorization ID.\n";
-				undef $_[0];
-			}
-			return $_[0];
-		});
-		my $bank_account_name = ask_question("Bank account name?");
-		my $iban = ask_question("IBAN?");
-		my $bic = ask_question("BIC?");
-		my $date = ask_question("Signature date (YYYY-MM-DD)?");
 		try {
-			::add_directdebit_account($lim, $self->{'account'}{'id'},
-				$authorization_id, $bank_account_name, $iban, $bic, $date);
+			cli_add_directdebit_authorization($self);
 		} catch {
-			warn "Failed: $_\n";
-		};
+			warn "\nFailed to add authorization: $_\n";
+		}
 	} else {
 		warn help_directdebit();
 	}
