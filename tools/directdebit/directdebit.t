@@ -117,7 +117,8 @@ try {
 	add_directdebit_account($lim, $account_id,
 		$authorization, 'Limesco B.V.',
 		'NL24RABO0169207587', 'RABONL2U',
-		'2013-04-01', '2013-04-05');
+		'2013-04-01');
+	delete_directdebit_account($lim, $authorization, '2014-04-05');
 } catch {
 	$exception = $_;
 };
