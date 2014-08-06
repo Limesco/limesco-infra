@@ -53,6 +53,14 @@ if(!caller) {
 		print "Starting import until $today...\n";
 		import_speakup_cdrs($lim, $uri_base, $token, $today);
 	}
+
+	my @errors = get_cdr_import_errors($lim);
+	if(@errors > 0) {
+		print "Errors exist in the database after import:\n";
+		foreach(@errors) {
+			printf("CDR date %s, import at %s: %s\n", $_->{'cdr_date'}, $_->{'import_time'}, $_->{'error'});
+		}
+	}
 }
 
 =head2 Methods
@@ -356,6 +364,24 @@ sub import_speakup_cdrs {
 	foreach(@dates) {
 		import_speakup_cdrs_by_day($lim, $uri_base, $token, $_);
 	}
+}
+
+=head3 get_cdr_import_errors($lim)
+
+Return all import errors present in the database.
+
+=cut
+
+sub get_cdr_import_errors {
+	my ($lim) = @_;
+	my $dbh = $lim->get_database_handle();
+	my $sth = $dbh->prepare("SELECT * FROM cdrimports WHERE error IS NOT NULL");
+	$sth->execute();
+	my @errors;
+	while(my $row = $sth->fetchrow_hashref) {
+		push @errors, $row;
+	}
+	return @errors;
 }
 
 1;

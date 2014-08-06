@@ -16,7 +16,7 @@ use URI qw();
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
 my $httpd = Test::HTTP::Server->new() or plan skip_all => "HTTP server failed to start";
-plan tests => 30;
+plan tests => 31;
 
 require_ok("cdr-import.pl");
 
@@ -38,6 +38,12 @@ $cdri_sth->execute('2013-03-03', '2013-03-06 01:00:00', 'Something happened');
 # 2013-03-04: imported fine
 $cdri_sth->execute('2013-03-04', '2013-03-06 01:00:00', undef);
 # 2013-03-05: no mention
+
+is_deeply([get_cdr_import_errors($lim)], [{
+	cdr_date => '2013-03-03',
+	import_time => '2013-03-06 01:00:00',
+	error => 'Something happened',
+}], "get_cdr_import_errors returns the error correctly");
 
 my @dates = get_cdr_import_dates($lim, '2013-03-06');
 is_deeply(\@dates, ['2013-03-02', '2013-03-03', '2013-03-05', '2013-03-06'], "Dates to retrieve computed fine");
