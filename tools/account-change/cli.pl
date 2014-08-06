@@ -320,7 +320,12 @@ sub cli_create_sim {
 			return;
 		}
 	});
-	return ::create_sim($self->{'lim'}, $sim, $starting_date);
+	if($stock_sim) {
+		delete $sim->{'iccid'};
+		return ::update_sim($self->{'lim'}, $iccid, $sim, $starting_date);
+	} else {
+		return ::create_sim($self->{'lim'}, $sim, $starting_date);
+	}
 }
 
 sub run_create {
