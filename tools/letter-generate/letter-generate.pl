@@ -11,6 +11,9 @@ use File::Basename qw(dirname);
 use Cwd qw(realpath);
 use IPC::Run qw(run);
 use Try::Tiny;
+use Email::MIME;
+use Email::Sender::Transport::SMTP;
+use Email::Sender::Simple qw(sendmail);
 use v5.14; # Unicode string features
 use open qw( :encoding(UTF-8) :std);
 use utf8;
@@ -215,6 +218,51 @@ sub generate_pdf {
 	}
 	close $fh;
 	return $pdffile;
+}
+
+=head3 send_pdf_by_email($lim, $pdf, $filename, $subject, $body, $email_name, $email_address)
+
+Send a document by e-mail to the given "$email_name <$email_address>".
+
+=cut
+
+sub send_pdf_by_email {
+	my ($lim, $pdf, $filename, $subject, $body, $email_name, $email_address) = @_;
+
+	my @parts = (
+		Email::MIME->create(
+			attributes => {
+				content_type => "text/plain",
+				charset => "UTF-8",
+			},
+			body => $body,
+		),
+		Email::MIME->create(
+			attributes => {
+				filename => $filename,
+				content_type => "application/pdf",
+				encoding => "base64",
+				name => $filename,
+				disposition => "attachment",
+			},
+			body => $pdf,
+		),
+	);
+	my $email_config = $lim->email_config();
+	my $emailobj = Email::MIME->create(
+		header_str => [
+			To => sprintf('"%s" <%s>', $email_name, $email_address),
+			From => $email_config->{'from'},
+			'Reply-To' => $email_config->{'replyto'},
+			Subject => $subject,
+		],
+		parts => [@parts],
+	);
+	my $transport = Email::Sender::Transport::SMTP->new({
+		host => $email_config->{'smtp_host'},
+		port => $email_config->{'smtp_port'},
+	});
+	sendmail($emailobj, {transport => $transport, to => [$email_address]});
 }
 
 1;
