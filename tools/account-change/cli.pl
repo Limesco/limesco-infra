@@ -684,6 +684,41 @@ sub cli_add_directdebit_authorization {
 		$authorization_id, $bank_account_name, $iban, $bic, $date);
 }
 
+sub cli_delete_directdebit_authorization {
+	my ($self) = @_;
+
+	if(!$self->{'account'}) {
+		die "Must have an account selected to deauthorize it for directdebit\n";
+	}
+
+	local $SIG{INT} = sub { die "Interrupted\n" };
+
+	my @authorizations = ::get_active_directdebit_authorizations($lim, $self->{'account'}{'id'});
+	my $authorization_id;
+	if(@authorizations == 0) {
+		die "No authorizations to remove.\n";
+	} elsif(@authorizations == 1) {
+		$authorization_id = $authorizations[0]{'authorization_id'};
+	} else {
+		my @options;
+		my $i = 0;
+		foreach(@authorizations) {
+			push @options, $_->{'authorization_id'}, [$_->{'iban'} . " (". $_->{'authorization_id'} . ")", ++$i];
+		}
+		$authorization_id = Term::Menu->menu(@options);
+	}
+
+	ask_question("Sure to delete authorization ID $authorization_id? [yN]", sub {
+		if(!$_[0] || lc($_[0]) ne "y") {
+			die "Cancelled.\n";
+		}
+		return 1;
+	});
+
+	my $enddate = ask_question("Directdebit end date?");
+	::delete_directdebit_account($self->{'lim'}, $authorization_id, $enddate);
+}
+
 sub run_directdebit {
 	my ($self, $command) = @_;
 
@@ -708,6 +743,12 @@ sub run_directdebit {
 		} catch {
 			warn "\nFailed to add authorization: $_\n";
 		}
+	} elsif($command eq "deauthorize") {
+		try {
+			cli_delete_directdebit_authorization($self);
+		} catch {
+			warn "\nFailed to remove authorization: $_\n";
+		}
 	} else {
 		warn help_directdebit();
 	}
@@ -718,9 +759,10 @@ sub help_directdebit {
 directdebit [info]
 directdebit generate
 directdebit authorize
+directdebit deauthorize
 
-Get information about current authorizations, generate new authorization ID's
-or add a new authorization.
+Get information about current authorizations, generate new authorization ID's,
+add a new authorization or delete an existing one.
 HELP
 }
 
