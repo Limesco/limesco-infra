@@ -73,9 +73,9 @@ if(!caller) {
 
 		my @auths = get_active_directdebit_authorizations($lim);
 		foreach my $authorization (@auths) {
-			my @invoices = select_directdebit_invoices($lim, $authorization);
+			my @invoices = select_directdebit_invoices($lim, $authorization->{'id'});
 			foreach my $invoice (@invoices) {
-				create_directdebit_transaction($lim, $authorization, $invoice);
+				create_directdebit_transaction($lim, $authorization->{'id'}, $invoice);
 			}
 		}
 		try {
@@ -261,22 +261,27 @@ sub get_all_directdebit_authorizations {
 	return @authorizations;
 }
 
-=head3 get_active_directdebit_authorizations($lim)
+=head3 get_active_directdebit_authorizations($lim, [$accountid])
 
-Returns a list of all active directdebit authorization ID's.
+Returns a list of all active directdebit authorizations. When an $accountid is given,
+limit to those on a given account.
 
 =cut
 
 sub get_active_directdebit_authorizations {
-	my ($lim) = @_;
+	my ($lim, $accountid) = @_;
 	my $dbh = $lim->get_database_handle();
 
 	# Find all invoices whose date is within the period of this authorization, belonging to this account
-	my $sth = $dbh->prepare("SELECT authorization_id FROM account_directdebit_info WHERE period @> 'now'::date");
-	$sth->execute();
+	my $query = "SELECT * FROM account_directdebit_info WHERE period @> 'now'::date";
+	if($accountid) {
+		$query .= " AND account_id=?";
+	}
+	my $sth = $dbh->prepare($query);
+	$sth->execute($accountid ? ($accountid) : ());
 	my @authorizations;
-	while(my $row = $sth->fetchrow_arrayref) {
-		push @authorizations, $row->[0];
+	while(my $row = $sth->fetchrow_hashref) {
+		push @authorizations, $row;
 	}
 	return @authorizations;
 }
