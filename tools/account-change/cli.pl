@@ -40,7 +40,8 @@ sub ask_question {
 	while(1) {
 		print "$question ";
 		my $answer = <STDIN>;
-		1 while chomp $answer;
+		$answer =~ s/^\s+//;
+		$answer =~ s/\s+$//;
 		if($validator) {
 			my $validated = $validator->($answer);
 			return $validated if defined $validated;
