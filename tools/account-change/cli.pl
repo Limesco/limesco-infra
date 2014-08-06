@@ -24,6 +24,8 @@ use Data::Dumper;
 use Carp;
 use Term::Shell;
 use Try::Tiny;
+use File::Basename qw(dirname);
+use Cwd qw(realpath);
 use base qw(Term::Shell);
 
 sub today {
@@ -993,4 +995,78 @@ HELP
 
 sub smry_delete {
 	return "delete selected object";
+}
+
+sub run_letter {
+	my ($self, $address) = @_;
+	if(!$self->{'account'}) {
+		warn "An account must be selected to use this command.";
+		return;
+	}
+
+	if(!$address) {
+		warn help_letter();
+		return;
+	}
+
+	my $sim = $self->{'sim'};
+	if(!$sim) {
+		# TODO: use a WHERE ... ORDER BY ... query
+		my @sims = grep { $_->{'owner_account_id'} && $_->{'owner_account_id'} == $self->{'account'}{'id'} }
+			::list_sims($self->{lim});
+
+		if(@sims == 0) {
+			warn "An acccount with at least one SIM must be selected to use this command.\n";
+			return;
+		} elsif(@sims > 1) {
+			warn "An account with more than one SIM is selected. Select a SIM explicitly using 'sim'.\n";
+			return;
+		} else {
+			$sim = $sims[0];
+		}
+	}
+
+	my @localtime = localtime;
+	my $objects = {
+		authorization => ::generate_directdebit_authorization($lim),
+		pwd => realpath(dirname($0)) . "/../letter-generate/",
+		account => $self->{'account'},
+		sim => $sim,
+		date => sprintf("%04d-%02d-%02d", $localtime[5] + 1900, $localtime[4] + 1, $localtime[3]),
+	};
+
+	my $instancename = $self->{'account'}{'company_name'};
+	if(!$instancename) {
+		$instancename = sprintf("%s %s", $self->{'account'}{'first_name'}, $self->{'account'}{'last_name'});
+	}
+	$instancename =~ s/ /_/g;
+
+	my @templates = ("welkomstbrief", "sepamachtiging");
+	for(my $file = 0; $file < @templates; ++$file) {
+		my $template = $templates[$file];
+
+		my $filename = sprintf("%s-%s.pdf", $template, $instancename);
+		try {
+			my $pdf = ::generate_pdf($lim, $objects, "../letter-generate/" . $template . ".tex");
+			::send_pdf_by_email($lim, $pdf, $filename, "Liminfra document",
+				"Attached to this e-mail is your requested Liminfra document.",
+				"Liminfra user", $address);
+		} catch {
+			warn "Failed to generate and send PDF for template $template: $_\n";
+		};
+	}
+}
+
+sub help_letter {
+	return <<HELP;
+letter [email_address]
+
+Send the welcome letters for the selected account to the given e-mail address.
+Account must have at least one SIM; if it has more than one, one must be
+selected using the 'sim' command.
+HELP
+}
+
+sub smry_letter {
+	return "generate and e-mail welcome letters";
 }
