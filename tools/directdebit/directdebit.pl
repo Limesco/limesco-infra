@@ -259,10 +259,10 @@ sub get_active_directdebit_authorizations {
 
 =head3 select_directdebit_invoices($lim, $authorization)
 
-Select all invoices for the given authorization code. Note: does not check if
-an invoice is already paid for otherwise than directdebit, all invoices within
-a given authorization are selected and returned unless they are already in a
-non-failure directdebit transaction.
+Select all invoices for the given authorization code, as long as the price is
+positive. Note: does not check if an invoice is already paid for otherwise than
+directdebit, all invoices within a given authorization are selected and
+returned unless they are already in a non-failure directdebit transaction.
 
 =cut
 
@@ -272,6 +272,7 @@ sub select_directdebit_invoices {
 
 	# Find all invoices whose date is within the period of this authorization, belonging to this account
 	my $sth = $dbh->prepare("SELECT * FROM invoice WHERE"
+		." rounded_with_taxes > 0 AND"
 		." account_id = (SELECT account_id FROM account_directdebit_info WHERE authorization_id=?) AND"
 		." date <@ (SELECT period FROM account_directdebit_info WHERE authorization_id=?) AND"
 		." NOT EXISTS (SELECT invoice_id FROM directdebit_transaction WHERE invoice_id=invoice.id AND (status='SUCCESS' OR status='NEW'));");
@@ -286,13 +287,18 @@ sub select_directdebit_invoices {
 =head3 create_directdebit_transaction($lim, $authorization, $invoice)
 
 Create a transaction for a given invoice. This allows the invoice to be bundled
-in a directdebit file to be sent to the bank. Returns the transaction.
+in a directdebit file to be sent to the bank. Returns the transaction. Throws
+an exception if the invoice amount is below zero.
 
 =cut
 
 sub create_directdebit_transaction {
 	my ($lim, $authorization, $invoice) = @_;
 	my $dbh = $lim->get_database_handle();
+
+	if($invoice->{'rounded_with_taxes'} < 0) {
+		die "Cannot create directdebit transaction for invoice amount below zero.";
+	}
 
 	# Status must be "NEW" until the transaction is claimed in a DD file
 	my $status = 'NEW';

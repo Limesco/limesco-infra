@@ -12,9 +12,10 @@ use Limesco;
 use Try::Tiny;
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 69;
+plan tests => 73;
 
 require_ok("directdebit.pl");
+require("../invoice-export/invoice-export.pl"); # for get_invoice
 
 my $lim = Limesco->new_for_test($pgsql->dsn);
 my $dbh = $lim->get_database_handle();
@@ -317,6 +318,27 @@ xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[1]/DbtrAcct/Id/IBA
 xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[2]/PmtId/InstrId', '14C000010', "Correct invoice ID is used");
 xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[2]/PmtId/EndToEndId', '14C000010', "Correct invoice ID is used");
 xml_is($xml, '/Document/CstmrDrctDbtInitn/PmtInf/DrctDbtTxInf[2]/InstdAmt', '400.00', "Correct amount is used");
+
+# Select new invoices for new transactions
+mark_directdebit_transaction($lim, $transaction3->{'id'}, "SUCCESS");
+@invoices = select_directdebit_invoices($lim, $authorization);
+is(scalar @invoices, 0, "No invoices in directdebit authorization after processing");
+
+$invoice_sth->execute("14C000020", $account_id, '2014-06-06', '2013-04-07 00:00:00', '-10.00', '-15.00');
+$invoice_sth->execute("14C000021", $account_id, '2014-06-06', '2013-04-07 00:00:00', '0.00', '0.00');
+$invoice_sth->execute("14C000022", $account_id, '2014-06-06', '2013-04-07 00:00:00', '1.00', '1.00');
+@invoices = select_directdebit_invoices($lim, $authorization);
+is(scalar @invoices, 1, "One invoice in directdebit authorization because both other invoices were below zero");
+is($invoices[0]{'id'}, "14C000022", "Only the above-zero invoice is listed");
+
+my $below_zero_invoice = get_invoice($lim, '14C000020');
+undef $exception;
+try {
+	create_directdebit_transaction($lim, $authorization, $below_zero_invoice);
+} catch {
+	$exception = $_;
+};
+ok($exception, "Exception thrown when creating directdebit transaction for invoice amount below zero");
 
 # TODO: mark a file as failed -> should lead to a pre-settlement reject on all transactions;
 # an exception must be thrown if any transaction is already marked before this
