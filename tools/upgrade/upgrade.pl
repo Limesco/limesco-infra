@@ -117,7 +117,7 @@ Returns the latest schema version supported by this tool.
 =cut
 
 sub get_latest_schema_version {
-	return 5;
+	return 6;
 }
 
 =head3 update_schema_version($lim, $dbh, $version)
@@ -219,7 +219,6 @@ sub initialize_database {
 
 		$dbh->do("CREATE TYPE simstate AS ENUM('STOCK', 'ALLOCATED', 'ACTIVATION_REQUESTED', 'ACTIVATED', 'DISABLED');");
 		$dbh->do("CREATE TYPE simdatatype AS ENUM('APN_NODATA', 'APN_500MB', 'APN_2000MB');");
-		$dbh->do("CREATE TYPE portingstate AS ENUM('NO_PORT', 'WILL_PORT', 'PORT_PENDING', 'PORT_DATE_KNOWN', 'PORTING_COMPLETED');");
 		$dbh->do("CREATE TYPE callconnectivitytype AS ENUM('OOTB', 'DIY');");
 		$dbh->do('CREATE DOMAIN invoiceid AS TEXT CHECK(VALUE ~ \'^\d\dC\d{6}$\');');
 		$dbh->do("CREATE TYPE currency AS ENUM('EUR');");
@@ -252,9 +251,6 @@ sub initialize_database {
 			CHECK (state='STOCK' OR exempt_from_cost_contribution IS NOT NULL),
 			CHECK (state!='STOCK' OR exempt_from_cost_contribution IS NULL),
 
-			porting_state PORTINGSTATE,
-			CHECK (state='STOCK' OR porting_state IS NOT NULL),
-			CHECK (state!='STOCK' OR porting_state IS NULL),
 			activation_invoice_id INVOICEID REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
 			CHECK (state!='STOCK' OR activation_invoice_id IS NULL),
 			last_monthly_fees_invoice_id INVOICEID REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
@@ -457,7 +453,13 @@ sub upgrade_database {
 			$current_version = 5;
 		}
 
-		if($current_version > 5) {
+		if($current_version == 5) {
+			remove_portingstate_from_sim($lim, $dbh);
+			update_schema_version($lim, $dbh, 6);
+			$current_version = 6;
+		}
+
+		if($current_version > 6) {
 			die "Not implemented";
 		}
 
@@ -572,6 +574,20 @@ sub add_service_invoice_itemline_column {
 
 	$sth = $dbh->prepare("UPDATE invoice_itemline SET service='DATA' where description like 'Dataverbruik%'");
 	$sth->execute();
+}
+
+=head3 remove_portingstate_from_sim($lim, $dbh)
+
+Remove the portingstate column from the SIM table. Now that we have a temporal
+database, it gives no information.
+
+=cut
+
+sub remove_portingstate_from_sim {
+	my ($lim, $dbh) = @_;
+
+	$dbh->do("ALTER TABLE invoice_itemline DROP COLUMN porting_state;");
+	$dbh->do("DROP TYPE portingstate;");
 }
 
 1;

@@ -46,7 +46,6 @@ is_deeply($sim, {
 	owner_account_id => undef,
 	data_type => undef,
 	exempt_from_cost_contribution => undef,
-	porting_state => undef,
 	activation_invoice_id => undef,
 	last_monthly_fees_invoice_id => undef,
 	last_monthly_fees_month => undef,
@@ -126,7 +125,6 @@ try {
 		owner_account_id => 2,
 		data_type => "APN_NODATA",
 		exempt_from_cost_contribution => 0,
-		porting_state => "NO_PORT",
 		call_connectivity_type => "DIY",
 	}, '2014-02-03');
 } catch {
@@ -146,7 +144,6 @@ try {
 		state => "ACTIVATED",
 		data_type => "APN_NODATA",
 		exempt_from_cost_contribution => 0,
-		porting_state => "NO_PORT",
 		call_connectivity_type => "DIY",
 	}, '2014-02-03');
 } catch {
@@ -168,7 +165,6 @@ try {
 		owner_account_id => 2,
 		data_type => "APN_NODATA",
 		exempt_from_cost_contribution => 0,
-		porting_state => "NO_PORT",
 		call_connectivity_type => "DIY",
 	}, '2014-02-03');
 } catch {
@@ -201,7 +197,6 @@ try {
 		owner_account_id => 2,
 		data_type => "APN_NODATA",
 		exempt_from_cost_contribution => 0,
-		porting_state => "NO_PORT",
 		call_connectivity_type => "DIY",
 	}, '2014-03-10');
 } catch {
@@ -218,7 +213,6 @@ is_deeply(get_sim($lim, "89310105029090284383"), {
 	owner_account_id => 2,
 	data_type => "APN_NODATA",
 	exempt_from_cost_contribution => 0,
-	porting_state => "NO_PORT",
 	call_connectivity_type => "DIY",
 	activation_invoice_id => undef,
 	last_monthly_fees_invoice_id => undef,
@@ -240,7 +234,6 @@ is_deeply(get_sim($lim, "89310105029090284383", '2014-03-09'), {
 	owner_account_id => undef,
 	data_type => undef,
 	exempt_from_cost_contribution => undef,
-	porting_state => undef,
 	activation_invoice_id => undef,
 	last_monthly_fees_invoice_id => undef,
 	last_monthly_fees_month => undef,
@@ -260,7 +253,6 @@ is_deeply([sim_changes_between($lim, "89310105029090284383", '2014-03-10', undef
 		owner_account_id => 2,
 		data_type => "APN_NODATA",
 		exempt_from_cost_contribution => 0,
-		porting_state => "NO_PORT",
 		call_connectivity_type => "DIY",
 		period => '[2014-03-10,)',
 	}], "SIM modifications are returned correctly");
@@ -295,7 +287,6 @@ is_deeply(get_sim($lim, "89310105029090284383", '2014-03-11'), {
 	owner_account_id => 2,
 	data_type => "APN_NODATA",
 	exempt_from_cost_contribution => 0,
-	porting_state => "NO_PORT",
 	call_connectivity_type => "DIY",
 	activation_invoice_id => undef,
 	last_monthly_fees_invoice_id => undef,

@@ -134,7 +134,6 @@ $win->set_binding(sub {
 				owner_account_id => $account_id,
 				data_type => $apn,
 				call_connectivity_type => $cct,
-				porting_state => $npt eq "true" ? "WILL_PORT" : "NO_PORT",
 				exempt_from_cost_contribution => 0,
 				state => "ACTIVATED",
 			});
@@ -276,7 +275,6 @@ $listbox->onChange(sub {
 			"Contract start date: $csd",
 			"Call connectivity type: " . $sim->{'call_connectivity_type'},
 			"Phone number: unknown",
-			"Porting state: " . $sim->{'porting_state'},
 			"Owner: $owner",
 			"APN type: " . $sim->{'data_type'},
 			"Exempt from cost contribution: " . $sim->{'exempt_from_cost_contribution'},
@@ -485,7 +483,6 @@ sub gui_run_object_field_update {
 		%closed_choices = (
 			state => [qw(STOCK ALLOCATED ACTIVATION_REQUESTED ACTIVATED DISABLED)],
 			data_ype => [qw(APN_NODATA APN_500MB APN_2000MB)],
-			porting_state => [qw(NO_PORT WILL_PORT PORT_PENDING PORT_DATE_KNOWN PORTING_COMPLETED)],
 			exempt_from_cost_contribution => [qw(true false)],
 			call_connectivity_type => [qw(OOTB DIY)],
 		);

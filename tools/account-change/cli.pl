@@ -309,16 +309,6 @@ sub cli_create_sim {
 	$sim->{'data_type'} = "APN_NODATA";
 	$sim->{'state'} = "ACTIVATED";
 	$sim->{'exempt_from_cost_contribution'} = 0;
-	$sim->{'porting_state'} = ask_question("Will a number be ported immediately? (y/n)", sub {
-		if(lc($_[0]) eq "y") {
-			return "WILL_PORT";
-		} elsif(lc($_[0]) eq "n") {
-			return "NO_PORT";
-		} else {
-			warn "Invalid response: make it 'y' or 'n'.\n";
-			return;
-		}
-	});
 	$sim->{'call_connectivity_type'} = ask_question("DIY or OOTB?", sub {
 		if(uc($_[0]) eq "DIY") {
 			return "DIY";
@@ -411,7 +401,6 @@ sub run_info {
 		print "Owner: " . cli_account_oneliner($self->{'account'}) . "\n";
 		print "Data type: " . $s->{'data_type'} . "\n";
 		print "Exempt from cost contribution: " . $s->{'exempt_from_cost_contribution'} . "\n";
-		print "Porting state: " . $s->{'porting_state'} . "\n";
 		print "Call connectivity type: " . $s->{'call_connectivity_type'} . "\n";
 		print "\n";
 		my $activation = $s->{'activation_invoice_id'};

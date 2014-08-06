@@ -45,7 +45,7 @@ sub _sim_object_info {
 		# should correspond to either NULL fields or those with a DEFAULT in the
 		# sim table.
 		optional_fields => [qw(owner_account_id data_type exempt_from_cost_contribution
-			porting_state activation_invoice_id last_monthly_fees_invoice_id
+			activation_invoice_id last_monthly_fees_invoice_id
 			last_monthly_fees_month call_connectivity_type sip_realm sip_username
 			sip_authentication_username sip_password sip_uri sip_expiry sip_trunk_password)],
 		table_name => "sim",

@@ -128,9 +128,9 @@ $dbh->do("INSERT INTO account (id, period, first_name, last_name,
 my $account_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "account_id_seq"});
 my $sim_iccid = '123456789012345678';
 $dbh->do("INSERT INTO sim (iccid, period, state, puk, owner_account_id,
-	data_type, exempt_from_cost_contribution, porting_state, call_connectivity_type)
+	data_type, exempt_from_cost_contribution, call_connectivity_type)
 	VALUES (?, '(,)', 'ACTIVATED', '123456', ?,
-	'APN_NODATA', 'f', 'NO_PORT', 'OOTB');", undef, $sim_iccid, $account_id);
+	'APN_NODATA', 'f', 'OOTB');", undef, $sim_iccid, $account_id);
 $dbh->do("INSERT INTO phonenumber (phonenumber, period, sim_iccid)
 	VALUES ('31600000000', '(,)', ?)", undef, $sim_iccid);
 $dbh->do("INSERT INTO speakup_account (name, period, account_id) VALUES
