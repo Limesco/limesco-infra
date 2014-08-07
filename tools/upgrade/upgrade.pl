@@ -117,7 +117,7 @@ Returns the latest schema version supported by this tool.
 =cut
 
 sub get_latest_schema_version {
-	return 6;
+	return 7;
 }
 
 =head3 update_schema_version($lim, $dbh, $version)
@@ -459,7 +459,30 @@ sub upgrade_database {
 			$current_version = 6;
 		}
 
-		if($current_version > 6) {
+		if($current_version == 6) {
+			# Allow multiple speakup_accounts for a single
+			# account_id in a period
+			$dbh->do("ALTER TABLE speakup_account DROP CONSTRAINT "
+				." speakup_account_account_id_period_excl");
+
+			# Remove null speakup_accounts
+			$dbh->do("DELETE FROM speakup_account WHERE "
+				." account_id IS NULL");
+			# Disallow null speakup accounts
+			$dbh->do("ALTER TABLE speakup_account ALTER COLUMN "
+				."account_id SET NOT NULL");
+
+			# fix default creation_time of an invoice
+			$dbh->do("ALTER TABLE invoice ALTER COLUMN "
+				."creation_time SET NOT NULL");
+			$dbh->do("ALTER TABLE invoice ALTER COLUMN "
+				."creation_time SET DEFAULT CURRENT_TIMESTAMP");
+
+			update_schema_version($lim, $dbh, 7);
+			$current_version = 7;
+		}
+
+		if($current_version > 7) {
 			die "Not implemented";
 		}
 
