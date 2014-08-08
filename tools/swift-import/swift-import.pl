@@ -96,6 +96,15 @@ sub process_statement {
 	$stmt->{creation_time} = get_fc_text($statement, 'CreDtTm');
 	$stmt->{account}->{iban} = get_fc_text(get_fc(get_fc($statement, 'Acct'), 'Id'), 'IBAN');
 	$stmt->{account}->{currency} = get_fc_text(get_fc($statement, 'Acct'), 'Ccy');
+	$stmt->{balance}->{open} = process_balance($statement, 'open');
+	$stmt->{balance}->{close} = process_balance($statement, 'close');
+	$stmt->{balance}->{diff} = process_balance($statement, 'diff');
+	$stmt->{balance}->{open_date} = process_balance($statement, 'open_date');
+	$stmt->{balance}->{close_date} = process_balance($statement, 'close_date');
+	$stmt->{balance}->{open_currency} = process_balance($statement, 'open_currency');
+	$stmt->{balance}->{close_currency} = process_balance($statement, 'close_currency');
+	$stmt->{entries} = process_entries($statement);
+
 
 	return $stmt;
 }
@@ -119,6 +128,71 @@ Gets first child $child_name from Twig $element
 sub get_fc {
 	my ($elem, $cn) = @_;
 	return $elem->first_child($cn);
+}
+
+=head4 process_balance ($element, $type)
+
+Get the opening and closing balace of a statement and calculate the difference
+
+=cut
+
+sub process_balance {
+	my ($elem, $type) = @_;
+
+	my @balances = $elem->get_xpath('Bal');
+	#print Dumper(@balances);
+
+	my $balance_open;
+	my $date_open;
+	my $currency_open;
+	my $balance_close;
+	my $date_close;
+	my $currency_close;
+
+	foreach my $balance (@balances) {
+		my $type = get_fc_text(get_fc(get_fc($balance, 'Tp'), 'CdOrPrtry'), 'Cd');
+		my $amount = get_fc_text($balance, 'Amt');
+		my $sign = (get_fc_text($balance, 'CdtDbtInd') eq "CRDT") ? 1 : -1;
+		$amount *= $sign;
+		my $date = get_fc_text(get_fc($balance, 'Dt'), 'Dt');
+
+		$balance_open = sprintf("%.2f", $amount) if ($type eq 'OPBD');
+		$date_open = $date if ($type eq 'OPBD');
+		$currency_open = get_fc($balance, 'Amt')->att('Ccy') if ($type eq 'OPBD');
+		$balance_close = sprintf("%.2f", $amount) if ($type eq 'CLBD');
+		$date_close = $date if ($type eq 'CLBD');
+		$currency_close = get_fc($balance, 'Amt')->att('Ccy') if ($type eq 'CLBD');
+	}
+
+	die "swift-import: process_balance failed! Open/Closing balance: '$balance_open'/'$balance_close'\n" if ((!$balance_open or !$balance_close) and ($date_open eq $date_close));
+
+	return $balance_open if ($type eq 'open');
+	return $balance_close if ($type eq 'close');
+	return $date_open if ($type eq 'open_date');
+	return $date_close if ($type eq 'close_date');
+	return $currency_open if ($type eq 'open_currency');
+	return $currency_close if ($type eq 'close_currency');
+	return sprintf("%.2f", $balance_close - $balance_open) if ($type eq 'diff');
+}
+
+=head4 process_entries ($element)
+
+Process all entries in the statement and return a readable format
+
+=cut
+
+sub process_entries {
+	my @entries = $_->get_xpath('Ntry');
+
+	my @results;
+
+	foreach my $entry (@entries) {
+		my $res;
+		$res->{amount} = get_fc_text($entry, 'Amt');
+		my $sign = (get_fc_text($entry, 'CdtDbtInd') eq "CRDT") ? 1 : -1;
+		$res->{amount} *= $sign;
+		$res->{booking_date} = get_fc_text(get_fc($entry, 'BookgDt'), 'Dt');
+	}
 }
 
 1;
