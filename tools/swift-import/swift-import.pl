@@ -11,6 +11,15 @@ use XML::Twig;
 =head1 swift-import.pl
 
 Usage: swift-import.pl [infra-options]
+                       [--format <format>]
+                       [--type <type>]
+                       --filename <filename>
+
+This tool can be used to view or import a bank statement (CAMT.053 XML format).
+
+  --format   <format>    Defaults to plain (table-like)
+  --type     <type>      'raw' for Perl datastructures in Dumper-format
+  --filename <filename>  Which file to read
 
 =cut
 
