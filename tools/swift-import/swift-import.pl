@@ -8,6 +8,9 @@ use Limesco;
 use Data::Dumper;
 use XML::Twig;
 
+require "./transaction_codes.pl";
+our $trx_codes;
+
 =head1 swift-import.pl
 
 Usage: swift-import.pl [infra-options]
@@ -195,8 +198,21 @@ sub process_entries {
 		$res->{booking_date} = get_fc_text(get_fc($entry, 'BookgDt'), 'Dt');
 		$res->{value_date} = get_fc_text(get_fc($entry, 'ValDt'), 'Dt');
 		$res->{transaction_code} = get_fc_text(get_fc(get_fc($entry, 'BkTxCd'), 'Prtry'), 'Cd');
-		$res->{transaction_code_hr} = 'Human-readable transaction code. To be implemented.';
+		$res->{transaction_code_hr} = $trx_codes->{$res->{transaction_code}};
 		$res->{reversal_indicator} = get_fc_text($entry, 'RvslInd');
+
+		my $related_parties = get_fc(get_fc(get_fc($entry, 'NtryDtls'), 'TxDtls'), 'RltdPties');
+		if ($related_parties) {
+			if (get_fc($related_parties, 'Dbtr')) {
+				$res->{name} = get_fc_text(get_fc($related_parties, 'Dbtr'), 'Nm');
+				$res->{iban} = get_fc_text(get_fc(get_fc($related_parties, 'DbtrAcct'), 'Id'), 'IBAN');
+			} else {
+				$res->{name} = get_fc_text(get_fc($related_parties, 'Cdtr'), 'Nm');
+			}
+		}
+
+		my $remittance_information = get_fc(get_fc(get_fc($entry, 'NtryDtls'), 'TxDtls'),'RmtInf');
+		$res->{description} = get_fc_text($remittance_information, 'Ustrd') if ($remittance_information);
 
 		push @results, $res;
 	}
