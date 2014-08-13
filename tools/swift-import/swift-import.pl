@@ -182,7 +182,8 @@ Process all entries in the statement and return a readable format
 =cut
 
 sub process_entries {
-	my @entries = $_->get_xpath('Ntry');
+	my ($elem, $type) = @_;
+	my @entries = $elem->get_xpath('Ntry');
 
 	my @results;
 
@@ -192,7 +193,17 @@ sub process_entries {
 		my $sign = (get_fc_text($entry, 'CdtDbtInd') eq "CRDT") ? 1 : -1;
 		$res->{amount} *= $sign;
 		$res->{booking_date} = get_fc_text(get_fc($entry, 'BookgDt'), 'Dt');
+		$res->{value_date} = get_fc_text(get_fc($entry, 'ValDt'), 'Dt');
+		$res->{transaction_code} = get_fc_text(get_fc(get_fc($entry, 'BkTxCd'), 'Prtry'), 'Cd');
+		$res->{transaction_code_hr} = 'Human-readable transaction code. To be implemented.';
+		$res->{reversal_indicator} = get_fc_text($entry, 'RvslInd');
+
+		push @results, $res;
 	}
+
+	my $results_ref = \@results;
+
+	return $results_ref;
 }
 
 1;
