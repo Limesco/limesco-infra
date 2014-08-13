@@ -192,9 +192,9 @@ sub process_entries {
 
 	foreach my $entry (@entries) {
 		my $res;
-		$res->{amount} = get_fc_text($entry, 'Amt');
+		my $amount = get_fc_text($entry, 'Amt');
 		my $sign = (get_fc_text($entry, 'CdtDbtInd') eq "CRDT") ? 1 : -1;
-		$res->{amount} *= $sign;
+		$res->{amount} = sprintf("%.2f", $amount*$sign);
 		$res->{booking_date} = get_fc_text(get_fc($entry, 'BookgDt'), 'Dt');
 		$res->{value_date} = get_fc_text(get_fc($entry, 'ValDt'), 'Dt');
 		$res->{transaction_code} = get_fc_text(get_fc(get_fc($entry, 'BkTxCd'), 'Prtry'), 'Cd');
