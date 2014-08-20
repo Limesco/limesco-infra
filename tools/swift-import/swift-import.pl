@@ -49,19 +49,32 @@ if(!caller) {
 	
 	die "No filename given.\n" if (!$filename);
 
-	my $swift = new XML::Twig(
-		twig_handlers =>
-		{ BkToCstmrStmt => \&handle_bankstatement }
-	);
-	$swift->parsefile($filename);
-	
 	print Dumper(@bankstatements) if ($type eq "raw");
 
 }
 
 =head2 Methods
 
-=head3 Twig-related methods
+=head3 Import-related functions
+
+=head4 import_bankstatement ($filename)
+
+Calls functions related to importing the bank statement
+
+=cut
+
+sub import_bankstatement {
+	my $filename = shift;
+
+	die "Given filename not readable.\n" if (! -r $filename );
+	die "Given filename has zero size.\n" if ( -z $filename );
+
+	my $swift = new XML::Twig(
+		twig_handlers =>
+		{ BkToCstmrStmt => \&handle_bankstatement }
+	);
+	$swift->parsefile($filename);
+}
 
 =head4 handle_bankstatement ($twig, $element)
 
@@ -220,6 +233,20 @@ sub process_entries {
 	my $results_ref = \@results;
 
 	return $results_ref;
+}
+
+=head3 Export-related functions
+
+=head4 export_to_database
+
+Exports all information to the database from @bankstatements
+
+=cut
+
+sub export_to_database {
+	my $num_statements = @bankstatements;
+
+	die "No statements available to be exported.\n" if ($num_statements == 0);
 }
 
 1;
