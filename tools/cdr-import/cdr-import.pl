@@ -454,7 +454,8 @@ sub update_cdrs_from_new_format_file {
 		}
 
 		if(!@old_cdrs) {
-			die "No old CDR found for a CDR found in the new file";
+			warn "No old CDR found for a CDR found in the new file";
+			next;
 		}
 
 		my $service = $old_cdrs[0]{'service'};
