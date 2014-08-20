@@ -117,7 +117,7 @@ Returns the latest schema version supported by this tool.
 =cut
 
 sub get_latest_schema_version {
-	return 7;
+	return 8;
 }
 
 =head3 update_schema_version($lim, $dbh, $version)
@@ -342,6 +342,7 @@ sub initialize_database {
 
 		$dbh->do("CREATE TYPE directiontype AS ENUM('IN', 'OUT');");
 
+		$dbh->do("CREATE TYPE legreason AS ENUM('ORIG', 'CFIM', 'CFOR', 'CFBS', 'CFNA', 'ROAM', 'CALLBACK');");
 		$dbh->do("CREATE TABLE pricing (
 			id SERIAL PRIMARY KEY NOT NULL,
 			period DATERANGE NOT NULL,
@@ -355,14 +356,13 @@ sub initialize_database {
 			destination TEXT[] NOT NULL,
 			direction DIRECTIONTYPE[] NOT NULL,
 			connected BOOLEAN[] NOT NULL,
+			legreason LEGREASON[] NOT NULL,
 
 			cost_per_line MONEY8 NOT NULL, -- used to be cost.perCall/perSms
 			cost_per_unit MONEY8 NOT NULL, -- used to be cost.perMinute/perKilobyte
 			price_per_line MONEY8 NOT NULL, -- used to be price.perCall/perSms
 			price_per_unit MONEY8 NOT NULL  -- used to be price.perMinute/perKilobyte
 		);");
-
-		$dbh->do("CREATE TYPE legreason AS ENUM('ORIG', 'CFIM', 'CFOR', 'CFBS', 'CFNA', 'ROAM', 'CALLBACK');");
 
 		$dbh->do("CREATE TABLE cdr (
 			id SERIAL PRIMARY KEY NOT NULL,
@@ -482,7 +482,14 @@ sub upgrade_database {
 			$current_version = 7;
 		}
 
-		if($current_version > 7) {
+		if($current_version == 7) {
+			$dbh->do("ALTER TABLE pricing ADD COLUMN legreason LEGREASON[] NOT NULL DEFAULT '{}'");
+
+			update_schema_version($lim, $dbh, 8);
+			$current_version = 8;
+		}
+
+		if($current_version > 8) {
 			die "Not implemented";
 		}
 

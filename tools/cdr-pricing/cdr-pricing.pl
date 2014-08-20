@@ -182,9 +182,10 @@ sub price_cdr {
 	my $query = "SELECT id, description, cost_per_line, cost_per_unit, price_per_line, price_per_unit "
 		."FROM pricing WHERE service=? AND period @> ?::date AND constraint_list_matches(?, source::text[]) "
 		."AND constraint_list_matches(?, destination::text[]) AND constraint_list_matches(?::text, direction::text[]) "
-		."AND constraint_list_matches(?::boolean::text, connected::text[]) " . $sim_specific_where . ";";
+		."AND constraint_list_matches(?::boolean::text, connected::text[]) AND constraint_list_matches(?::text, legreason::text[]) "
+		. $sim_specific_where . ";";
 	my @variables = ($cdr->{'service'}, $cdr->{'time'}, $cdr->{'source'}, $cdr->{'destination'}, $cdr->{'direction'}, $cdr->{'connected'},
-		@$sim_specific_variables);
+		$cdr->{'reason'}, @$sim_specific_variables);
 	$sth = $dbh->prepare($query);
 	$sth->execute(@variables);
 	my $pricing_rule = $sth->fetchrow_hashref();
