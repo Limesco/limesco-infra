@@ -109,6 +109,18 @@ sub email_config {
 	return $self->{'config'}{'email'};
 }
 
+sub speakup_config {
+	my ($self) = @_;
+	my $c = $self->{'config'}{'speakup'};
+	if(!$c) {
+		die "Speakup configuration block missing in config file\n";
+	}
+	if(!$c->{'uri_base'} || !$c->{'username'} || !$c->{'password'}) {
+		die "Missing speakup configuration parameters in config file\n";
+	}
+	return $self->{'config'}{'speakup'};
+}
+
 sub get_database_handle {
 	my ($self, $allow_cached) = @_;
 	$allow_cached = 1 if not defined($allow_cached);

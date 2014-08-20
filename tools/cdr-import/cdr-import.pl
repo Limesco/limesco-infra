@@ -15,9 +15,9 @@ use Text::CSV;
 
 Usage: cdr-import.pl [infra-options] [--date YYYY-MM-DD]
 
-Import all CDRs from SpeakUp. Asks URI base, username and password on stdin. If
---date is given, retrieves CDRs for that date only; otherwise, make sure that
-all dates are up-to-date by 24 hours after the day ended.
+Import all CDRs from SpeakUp. Takes URI base, username and password from config
+file. If --date is given, retrieves CDRs for that date only; otherwise, make
+sure that all dates are up-to-date by 24 hours after the day ended.
 
 =cut
 
@@ -34,15 +34,10 @@ if(!caller) {
 	});
 
 	$|++;
-	print "URI base URL? ";
-	my $uri_base = <STDIN>;
-	print "Username? ";
-	my $username = <STDIN>;
-	print "Password? ";
-	my $password = <STDIN>;
-	1 while chomp $uri_base;
-	1 while chomp $username;
-	1 while chomp $password;
+	my $config = $lim->speakup_config();
+	my $uri_base = $config->{'uri_base'};
+	my $username = $config->{'username'};
+	my $password = $config->{'password'};
 	print "Retrieving token...\n";
 	my $token = get_speakup_login_token($lim, $uri_base, $username, $password);
 	if($date) {

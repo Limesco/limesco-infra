@@ -17,3 +17,8 @@ blind_cc=sjors@limesco.nl
 ; Optional fields, given are the defaults
 ; smtp_host=localhost
 ; smtp_port=25
+
+[speakup]
+;uri_base=
+;username=
+;password=
