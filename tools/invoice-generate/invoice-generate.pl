@@ -517,7 +517,7 @@ sub generate_invoice {
 				} else {
 					$duration_itemline->($invoice_id, $description, $sum_prices, $number_of_lines, $sum_units, $pricing);
 				}
-			} elsif($pricing->{'service'} eq "DATA") {
+			} elsif($pricing->{'service'} eq "DATA" && (!$pricing->{'source'} || $pricing->{'source'}[0] eq "Netherlands - Mobile - SpeakUp")) {
 				foreach my $cdr (@{$cdr_per_pricing_rule{$_}}) {
 					my ($month) = $cdr->{'time'} =~ /^(\d{4}-\d{2})-\d{2} [\d:]+$/;
 					if(!$month) {
@@ -528,6 +528,14 @@ sub generate_invoice {
 					$month_to_number_to_data_cdrs{$month}{$number} ||= [];
 					push @{$month_to_number_to_data_cdrs{$month}{$number}}, $cdr;
 				}
+			} elsif($pricing->{'service'} eq "DATA") {
+				# Roaming data use: use price-per-unit as in database
+				my $sum_units = 0;
+				foreach(@{$cdr_per_pricing_rule{$_}}) {
+					$sum_units += $_->{'units'};
+				}
+				my $description = $pricing->{'description'};
+				$normal_itemline->($invoice_id, $description, $sum_units, $pricing->{'price_per_unit'}, "DATA");
 			} else {
 				die "Unknown pricing service referenced by CDR pricing information\n";
 			}
