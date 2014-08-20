@@ -10,16 +10,17 @@ use Try::Tiny;
 
 =head1 pricings.pl
 
-Usage: pricings.pl [no CLI options available yet]
+Usage: pricings.pl [--service <service>]
 
 =cut
 
 if(!caller) {
+	my $service;
 	my $lim = Limesco->new_from_args(\@ARGV, sub {
 		my ($args, $iref) = @_;
 		my $arg = $args->[$$iref];
-		if($arg eq "--export") {
-			print $args->[++$$iref];
+		if($arg eq "--service") {
+			$service = $args->[++$$iref];
 		} else {
 			return 0;
 		}
@@ -27,6 +28,9 @@ if(!caller) {
 
 	my @pricings = list_pricings($lim);
 	foreach(@pricings) {
+		if($service && $_->{'service'} ne uc($service)) {
+			next;
+		}
 		print pricing_to_string($lim, $_);
 	}
 }
