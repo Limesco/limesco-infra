@@ -13,25 +13,37 @@ use Text::CSV;
 
 =head1 cdr-import.pl
 
-Usage: cdr-import.pl [infra-options] [--date YYYY-MM-DD]
+Usage: cdr-import.pl [infra-options] [--update-from-csv filename] [--date YYYY-MM-DD]
 
-Import all CDRs from SpeakUp. Takes URI base, username and password from config
-file. If --date is given, retrieves CDRs for that date only; otherwise, make
-sure that all dates are up-to-date by 24 hours after the day ended.
+If --update-from-csv is given, update existing CDRs in the database using the
+given filename which is assumed to contain new-style SpeakUp CDRs.
+
+Otherwise, import all CDRs from SpeakUp. Takes URI base, username and password
+from config file. If --date is given, retrieves CDRs for that date only;
+otherwise, make sure that all dates are up-to-date by 24 hours after the day
+ended.
 
 =cut
 
 if(!caller) {
+	my $filename;
 	my $date;
 	my $lim = Limesco->new_from_args(\@ARGV, sub {
 		my ($args, $iref) = @_;
 		my $arg = $args->[$$iref];
 		if($arg eq "--date") {
 			$date = $args->[++$$iref];
+		} elsif($arg eq "--update-from-csv") {
+			$filename = $args->[++$$iref];
 		} else {
 			return 0;
 		}
 	});
+
+	if($filename) {
+		update_cdrs_from_new_format_file($lim, $filename);
+		exit(0);
+	}
 
 	$|++;
 	my $config = $lim->speakup_config();
@@ -395,6 +407,191 @@ sub get_cdr_import_errors {
 		push @errors, $row;
 	}
 	return @errors;
+}
+
+=head3 update_cdrs_from_new_format_file($lim, $filename)
+
+=cut
+
+sub update_cdrs_from_new_format_file {
+	my ($lim, $filename) = @_;
+	my $dbh = $lim->get_database_handle();
+
+	open my $fh, '<', $filename or die $!;
+	my $body = '';
+	while(<$fh>) {
+		$body .= $_;
+	}
+	close $fh;
+	my @calls;
+	import_speakup_cdrs_from_csv($lim, sub {
+		my $su_cdr = $_[0];
+		my $cid = $su_cdr->{'cid'};
+		my $time = $su_cdr->{'time'};
+		my $account = $su_cdr->{'account'};
+		my $latest_cdr = $calls[$#calls][0] if(@calls > 0);
+
+		if($latest_cdr && $latest_cdr->{'cid'} eq $cid && $latest_cdr->{'time'} eq $time
+		&& $latest_cdr->{'account'} eq $account) {
+			push @{$calls[$#calls]}, $su_cdr;
+		} else {
+			push @calls, [$su_cdr];
+		}
+	}, $body);
+	undef $body;
+	my $call_sth = $dbh->prepare("SELECT * FROM cdr WHERE call_id=? AND time >= (?::timestamp - '30 seconds'::interval) AND time <= (?::timestamp + '30 seconds'::interval) AND speakup_account=? AND service=?");
+	my $updated_cdrs = 0;
+	foreach(@calls) {
+		my @new_cdrs = @$_;
+		my @old_cdrs;
+		$call_sth->execute($new_cdrs[0]{'cid'}, $new_cdrs[0]{'time'}, $new_cdrs[0]{'time'}, $new_cdrs[0]{'account'}, uc($new_cdrs[0]{'type'}));
+		while(my $old_cdr = $call_sth->fetchrow_hashref) {
+			push @old_cdrs, $old_cdr;
+		}
+
+		if(!@old_cdrs) {
+			die "No old CDR found for a CDR found in the new file";
+		}
+
+		my $service = $old_cdrs[0]{'service'};
+		if($service eq "DATA" || $service eq "SMS") {
+			if(@new_cdrs > 1 || @old_cdrs > 1) {
+				die "Number of CDRs cannot be more than 1 for data or sms";
+			}
+
+			my $new_cdr = $new_cdrs[0];
+			my $old_cdr = $old_cdrs[0];
+			my $speakup_account = $new_cdr->{'account'};
+			if($speakup_account ne $old_cdr->{'speakup_account'}) {
+				die "Mismatch in SpeakUp account";
+			}
+			my $units = $new_cdr->{'usage'};
+			if($units != $old_cdr->{'units'}) {
+				die "Mismatch in units";
+			}
+
+			# Data CDRs have destination "Netherlands - Other - Internet" in new CDR,
+			# undefined in new CDR
+			if($service eq "DATA" && $new_cdr->{'destination'} eq "Netherlands - Other - Internet"
+			&& !defined($old_cdr->{'destination'})) {
+				# make them match
+				delete $new_cdr->{'destination'};
+			}
+
+			for(qw(from to destination)) {
+				if($new_cdr->{destination}) {
+					die "New one is set\n";
+				}
+				if($old_cdr->{destination}) {
+					die "New one is set\n";
+				}
+				if(!defined($new_cdr->{$_}) && !defined($old_cdr->{$_})) {
+					# both undefined, that's fine
+				} elsif($_ eq "destination" && !defined($old_cdr->{$_}) && $new_cdr->{$_} eq '') {
+					# undefined versus empty, that's fine
+				} elsif(!defined($new_cdr->{$_}) || !defined($old_cdr->{$_}) || $new_cdr->{$_} ne $old_cdr->{$_}) {
+					die "Mismatch in $_";
+				}
+			}
+
+			$old_cdr->{new_fields} = $new_cdr;
+
+			# OK, no mismatches, allow updating the CDR
+		} elsif($service eq "VOICE") {
+			foreach my $new_cdr (@new_cdrs) {
+				my $this_leg;
+				foreach my $old_cdr (@old_cdrs) {
+					# there may be asterisks at the end that should match
+					my $old_to = $old_cdr->{'to'};
+					my $new_to = $new_cdr->{'to'};
+					my ($old_num, $old_aster) = $old_to =~ /^(\d+)(\**)$/;
+					my ($new_num, $new_aster) = $new_to =~ /^(\d+)(\**)$/;
+					if(!$old_num || !$new_num) {
+						$old_num = $old_to;
+						$new_num = $new_to;
+						$old_aster = $new_aster = '';
+					}
+					if(length($old_num) + length($old_aster) != length($new_num) + length($new_aster)) {
+						next;
+					}
+
+					my $num_length = length($old_num) < length($new_num) ? length($old_num) : length($new_num);
+					$old_num = substr($old_num, 0, $num_length);
+					$new_num = substr($new_num, 0, $num_length);
+					if($old_num ne $new_num) {
+						next;
+					}
+					my $units_matches = $old_cdr->{units} == $new_cdr->{usage};
+					if($old_cdr->{connected} == 0 && $new_cdr->{'costs'} == 0) {
+						# this is a hack; in the new CDR list, if there are multiple CDRs for a call
+						# where one leg is succesful, all legs will have a number of units but a costs of 0.
+						$units_matches = 1;
+					}
+					if($old_cdr->{from} eq $new_cdr->{from}
+					&& $old_cdr->{speakup_account} eq $new_cdr->{account}
+					&& $units_matches
+					&& $old_cdr->{destination} eq $new_cdr->{destination}) {
+						if($this_leg) {
+							# this means all the old CDRs will be updated with this new
+							# information, that's fine
+							warn sprintf("New CDR could be matched against multiple old CDRs: %s / %s (duration %d)\n",
+								$new_cdr->{'cid'}, $new_cdr->{'time'}, $new_cdr->{'usage'});
+						}
+						if($old_cdr->{'new_fields'}) {
+							die "Old CDR could be mathed to multiple new CDRs";
+						}
+						$this_leg = $old_cdr;
+						$old_cdr->{'new_fields'} = $new_cdr;
+					}
+				}
+
+				# if this is a short call, only warn about it
+				if(!$this_leg) {
+					my $error = sprintf("New CDR could be matched against no old CDRs: %s / %s (duration %d)\n",
+						$new_cdr->{'cid'}, $new_cdr->{'time'}, $new_cdr->{'usage'});
+					#if($service eq "VOICE" && $new_cdr->{usage} < 60) {
+						warn $error;
+					#} else {
+						#warn "New CDRs: " . Dumper(\@new_cdrs);
+						#warn "Old CDRs: " . Dumper(\@old_cdrs);
+						#die $error;
+					#}
+				}
+			}
+		} else {
+			die "Unknown service";
+		}
+
+		# OK, allow updating the CDR
+		# TODO: update cli, costs, package, package_costs
+		my $update_sth = $dbh->prepare("UPDATE cdr SET source=?, leg=?, reason=? WHERE id=?");
+		foreach my $old_cdr (@old_cdrs) {
+			my $new_cdr = $old_cdr->{'new_fields'};
+			if(!$new_cdr) {
+				# this is allowed in some situations where it doesn't matter anyway
+				if($old_cdr->{'service'} eq "VOICE" &&
+				($old_cdr->{'connected'} == 0) || ($old_cdr->{'direction'} eq 'IN')) {
+					next;
+				}
+				# if this is a short call, only warn about it
+				my $error = sprintf("CDR was not linked to a new CDR leg: %s / %s (duration %d)\n",
+					$old_cdr->{'call_id'}, $old_cdr->{'time'}, $old_cdr->{'units'});
+				if($service eq "VOICE" && $old_cdr->{units} < 60) {
+					warn $error;
+				} else {
+					#warn "New CDRs: " . Dumper(\@new_cdrs);
+					#warn "Old CDRs: " . Dumper(\@old_cdrs);
+					die $error;
+				}
+			}
+			if(defined $new_cdr->{'source'} && $new_cdr->{'source'} eq "") {
+				undef $new_cdr->{'source'};
+			}
+			$update_sth->execute($new_cdr->{'source'}, $new_cdr->{'leg'}, $new_cdr->{'reason'}, $old_cdr->{'id'});
+			$updated_cdrs++;
+		}
+	}
+	print "Done! $updated_cdrs succesfully updated.\n";
 }
 
 1;
