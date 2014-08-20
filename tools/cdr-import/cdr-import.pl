@@ -347,6 +347,10 @@ sub import_speakup_cdrs_by_day {
 				my @fields = keys %$cdr;
 				my $fields = join('", "', @fields);
 				my $placeholders = join ", ", (('?') x @fields);
+				# call which has not ended has units empty
+				if($cdr->{'units'} eq "") {
+					$cdr->{'units'} = 0;
+				}
 				$sth = $dbh->prepare("INSERT INTO cdr (\"$fields\") VALUES ($placeholders)");
 				$sth->execute(map { $cdr->{$_} } @fields);
 			}
