@@ -7,6 +7,8 @@ use lib '../../lib';
 use Limesco;
 use Limesco::TemporalSupport;
 use Try::Tiny;
+use v5.14; # Unicode string features
+use open qw( :encoding(UTF-8) :std);
 
 =head1 pricings.pl
 
