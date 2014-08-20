@@ -292,24 +292,42 @@ sub import_speakup_cdrs_by_day {
 					delete $row->{$_};
 				}
 
-				foreach(keys %$row) {
-					if(!defined($cdr->{$_}) && !defined($row->{$_})) {
+				foreach my $key (keys %$row) {
+					if(!defined($cdr->{$key}) && !defined($row->{$key})) {
 						# both undefined, that's fine but don't warn
-					} elsif($_ eq "destination"
-					     && !defined($cdr->{$_})
-					     && defined($row->{$_})
-					     && $row->{$_} eq "") {
+					} elsif($key eq "destination"
+					     && !defined($cdr->{$key})
+					     && defined($row->{$key})
+					     && $row->{$key} eq "") {
 						# we made it undef, database has empty, that's ok
-					} elsif(!defined($cdr->{$_})
-					     || !defined($row->{$_})
-					     || $cdr->{$_} ne $row->{$_}) {
-						# TODO: without a uniquely identifying field or combination of fields,
-						# we can't be sure if this is the same CDR or one that looks a lot like
-						# it; for now, warn about this situation and only one of two CDRs will be
-						# inserted into the database
-						warn sprintf("CDR-lookalike: id=%d, account=%s, service=%s, units=%d",
-							$row->{'id'}, map { $cdr->{$_} } qw/speakup_account service units/);
-						#die "CDR already existed but $_ doesn't match: " . $row->{'id'};
+					} elsif(!defined($cdr->{$key})
+					     || !defined($row->{$key})
+					     || $cdr->{$key} ne $row->{$key}) {
+						if($key eq "units") {
+							if($cdr->{'units'} ne "") {
+								# units can change when call was in progress and has now ended, so update it
+								my $sth = $dbh->prepare("UPDATE cdr SET units=? WHERE id=?");
+								$sth->execute($cdr->{'units'}, $row->{'id'});
+								$row->{'units'} = $cdr->{'units'};
+							}
+						} elsif($key eq "connected") {
+							# when call was not connected, then connected in the forwarded version,
+							# we only import one cdr because we cannot distinguish between the two
+							# set 'connected' to 1 for this call
+							if(!$row->{'connected'}) {
+								my $sth = $dbh->prepare("UPDATE cdr SET connected=true WHERE id=?");
+								$sth->execute($row->{'id'});
+								$row->{'connected'} = 1;
+							}
+						} else {
+							# TODO: without a uniquely identifying field or combination of fields,
+							# we can't be sure if this is the same CDR or one that looks a lot like
+							# it; for now, warn about this situation and only one of two CDRs will be
+							# inserted into the database
+							warn sprintf("CDR-lookalike: id=%d/new, account=%s/%s, service=%s/%s, %s=%s/%s",
+								$row->{'id'}, (map { $row->{$_}, $cdr->{$_} } qw/speakup_account service/),
+								$key, $row->{$key}, $cdr->{$key});
+						}
 					}
 				}
 			} else {
