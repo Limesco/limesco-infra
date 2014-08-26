@@ -23,8 +23,8 @@ initialize_database($lim);
 
 # Insert a single pricing
 $dbh->do("INSERT INTO pricing (period, description, hidden, service, call_connectivity_type, source, destination, direction, connected,
-		cost_per_line, cost_per_unit, price_per_line, price_per_unit) VALUES ('(,)', 'Test pricing', 'f', 'VOICE', '{}', '{First Test Source}', '{}',
-		'{}', '{}', 0, 0, 0, 0)");
+		cost_per_line, cost_per_unit, price_per_line, price_per_unit, legreason) VALUES ('(,)', 'Test pricing', 'f', 'VOICE', '{}', '{First Test Source}', '{}',
+		'{}', '{}', 0, 0, 0, 0, '{}')");
 my $null_pricing_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "pricing_id_seq"});
 my $insert_cdr = $dbh->prepare("INSERT INTO cdr (service, call_id, \"from\", \"to\", speakup_account, time, pricing_id, pricing_info,
 	computed_cost, computed_price, units, connected, source, destination, direction, leg, reason)
@@ -103,8 +103,8 @@ is($unpriced_cdr_priced, 0, "Unpriced CDR was unpricable");
 like($exception, qr/\bunpricable\b/, "Unpricable CDR error contains 'unpricable'");
 
 my $insert_pricing = $dbh->prepare("INSERT INTO pricing (period, description, service, hidden,
-	call_connectivity_type, source, destination, direction, connected, cost_per_line, cost_per_unit, price_per_line, price_per_unit)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+	call_connectivity_type, source, destination, direction, connected, cost_per_line, cost_per_unit, price_per_line, price_per_unit, legreason)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}')");
 $insert_pricing->execute("(,)", "Some Description", "VOICE", "f", ["OOTB"], ["Test Source"], ["Test Destination"], ["OUT"], ["t"], 1, 10, 2, 20);
 my $pricing_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "pricing_id_seq"});
 
