@@ -274,7 +274,7 @@ sub print_directdebit {
 				printf("!Account\nN%s\nTOth A\n^\n", $invoice->{full_name});
 				print "!Type:Oth A\n";
 
-				printf("D%s\nT-%.2f\nMFactuur %s\nSAutomatisch incasso\n\$-%.2f\n^\n",
+				printf("D%s\nT-%.2f\nMIncasso voor factuur %s\nSAutomatisch incasso\n\$-%.2f\n^\n",
 					$invoice->{processing_date},
 					$invoice->{rounded_with_taxes},
 					$invoice->{invoice_id},
