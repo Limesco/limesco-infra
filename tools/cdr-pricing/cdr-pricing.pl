@@ -117,6 +117,44 @@ sub for_every_unpriced_cdr {
 	}
 }
 
+sub pg_list {
+	my ($list) = @_;
+	if(ref($list) eq "ARRAY") {
+		return $list;
+	} elsif($list && !defined(ref($list))) {
+		return [] if $list eq '{}';
+		die "List not unpacked: $list\n";
+	} else {
+		die "List of wrong format: " . Dumper($list) . "\n";
+	}
+}
+
+sub pg_xor {
+	my ($value, $rule1, $rule2) = @_;
+	my $list1 = pg_list($rule1->{$value});
+	my $list2 = pg_list($rule2->{$value});
+	if(@$list1 == 0 && @$list2 != 0) {
+		return $rule2;
+	} elsif(@$list1 != 0 && @$list2 == 0) {
+		return $rule1;
+	} else {
+		return undef;
+	}
+}
+
+sub country_match {
+	my ($country, $list) = @_;
+	foreach(@$list) {
+		return 1 if($country =~ /^$_ - /);
+	}
+	return 0;
+}
+
+sub min_bound {
+	my ($a, $b) = @_;
+	return $a < $b ? $a : $b;
+}
+
 =head3 price_cdr($lim, $cdr)
 
 Try to price a CDR. Updates its pricing_id, computed_price and computed_cost,
@@ -179,7 +217,7 @@ sub price_cdr {
 	my $sim_specific_where = $sim ? "AND constraint_list_matches(?, call_connectivity_type::text[])" : "";
 	my $sim_specific_variables = $sim ? [$sim->{'call_connectivity_type'}] : [];
 
-	my $query = "SELECT id, description, cost_per_line, cost_per_unit, price_per_line, price_per_unit "
+	my $query = "SELECT id, description, cost_per_line, cost_per_unit, price_per_line, price_per_unit, source, destination "
 		."FROM pricing WHERE service=? AND period @> ?::date AND constraint_list_matches(?, source::text[]) "
 		."AND constraint_list_matches(?, destination::text[]) AND constraint_list_matches(?::text, direction::text[]) "
 		."AND constraint_list_matches(?::boolean::text, connected::text[]) AND constraint_list_matches(?::text, legreason::text[]) "
@@ -198,23 +236,54 @@ sub price_cdr {
 		}
 		die sprintf("This CDR is unpricable: no pricing rule could be found for this CDR.\nQuery was: %s\nVariables were:\n%s", $query, $variables);
 	}
-	if($sth->fetchrow_hashref()) {
-		if($unpricable_error) {
+	my $second_pricing_rule = $sth->fetchrow_hashref();
+	if($second_pricing_rule) {
+		if(pg_xor('source', $pricing_rule, $second_pricing_rule)
+		&& pg_xor('destination', $pricing_rule, $second_pricing_rule)) {
+			# one pricing rule has only source, one has only destination, use both
+			my $price_per_line = $pricing_rule->{'price_per_line'} + $second_pricing_rule->{'price_per_line'};
+			my $price_per_unit = $pricing_rule->{'price_per_unit'} + $second_pricing_rule->{'price_per_unit'};
+			my $cost_per_line = $pricing_rule->{'cost_per_line'} + $second_pricing_rule->{'cost_per_line'};
+			my $cost_per_unit = $pricing_rule->{'cost_per_unit'} + $second_pricing_rule->{'cost_per_unit'};
+			my $source_rule = pg_xor('source', $pricing_rule, $second_pricing_rule);
+			my $destination_rule = pg_xor('destination', $pricing_rule, $second_pricing_rule);
+			my @europe = (qw(Austria Belgium Bulgaria Croatia
+				Cyprus Denmark Finland France Germany Greece
+				Hungary Ireland Italy Latvia Luxembourg Malta
+				Poland Portugal Romania Slovakia spain Sweden),
+				"Czech Republic", "United Kingdom");
+			my @eu_or_nl = (@europe, "Netherlands");
+			if(country_match($cdr->{'source'}, \@europe) && country_match($cdr->{'destination'}, \@eu_or_nl)) {
+				# Calling from EU to NL/EU is limited
+				$price_per_line = 0;
+				$price_per_unit = min_bound($price_per_unit, 0.1983471074 / 60);
+			}
+			$cdr->{'computed_price'} = $price_per_line + $cdr->{'units'} * $price_per_unit;
+			$cdr->{'computed_cost'} = $cost_per_line + $cdr->{'units'} * $cost_per_unit;
+			$cdr->{'pricing_id'} = $source_rule->{'id'};
+			$cdr->{'pricing_id_two'} = $destination_rule->{'id'};
+			$cdr->{'pricing_info'} = {
+				description => $source_rule->{'description'},
+				description_two => $destination_rule->{'description'},
+				iccid => $sim->{'iccid'},
+			};
+		} elsif($unpricable_error) {
 			# Probably, multiple pricing rules were found because they depend on SIM specific information
 			# but we have no SIM card to take this information from. Throw that error.
 			die $unpricable_error;
 		} else {
 			die sprintf("This CDR is unpricable: multiple pricing rules could be found for this CDR");
 		}
+	} else {
+		# a single pricing rule
+		$cdr->{'computed_price'} = $pricing_rule->{'price_per_line'} + $cdr->{'units'} * $pricing_rule->{'price_per_unit'};
+		$cdr->{'computed_cost'} = $pricing_rule->{'cost_per_line'} + $cdr->{'units'} * $pricing_rule->{'cost_per_unit'};
+		$cdr->{'pricing_id'} = $pricing_rule->{'id'};
+		$cdr->{'pricing_info'} = {
+			description => $pricing_rule->{'description'},
+			iccid => $sim->{'iccid'},
+		};
 	}
-
-	$cdr->{'computed_price'} = $pricing_rule->{'price_per_line'} + $cdr->{'units'} * $pricing_rule->{'price_per_unit'};
-	$cdr->{'computed_cost'} = $pricing_rule->{'cost_per_line'} + $cdr->{'units'} * $pricing_rule->{'cost_per_unit'};
-	$cdr->{'pricing_id'} = $pricing_rule->{'id'};
-	$cdr->{'pricing_info'} = {
-		description => $pricing_rule->{'description'},
-		iccid => $sim->{'iccid'},
-	};
 }
 
 =head3 write_cdr_pricing($lim, $cdr)
@@ -226,8 +295,9 @@ Write a CDR's pricing information into the database.
 sub write_cdr_pricing {
 	my ($lim, $cdr) = @_;
 	my $dbh = $lim->get_database_handle();
-	$dbh->do("UPDATE cdr SET pricing_id=?, pricing_info=?, computed_cost=?, computed_price=? WHERE id=?",
-		undef, $cdr->{'pricing_id'}, encode_json($cdr->{'pricing_info'}), $cdr->{'computed_cost'}, $cdr->{'computed_price'}, $cdr->{'id'})
+	$dbh->do("UPDATE cdr SET pricing_id=?, pricing_id_two=?, pricing_info=?, computed_cost=?, computed_price=? WHERE id=?",
+		undef, $cdr->{'pricing_id'}, $cdr->{'pricing_id_two'}, encode_json($cdr->{'pricing_info'}),
+		$cdr->{'computed_cost'}, $cdr->{'computed_price'}, $cdr->{'id'})
 		or die "Query failed";
 }
 

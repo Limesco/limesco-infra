@@ -299,7 +299,7 @@ sub import_speakup_cdrs_by_day {
 				$cdr->{'id'} = $row->{'id'};
 
 				# rows that may differ
-				for(qw/pricing_id pricing_info computed_cost computed_price invoice_id/) {
+				for(qw/pricing_id pricing_id_two pricing_info computed_cost computed_price invoice_id/) {
 					delete $cdr->{$_};
 					delete $row->{$_};
 				}
