@@ -487,17 +487,29 @@ sub generate_invoice {
 		$sth->execute($account_id, $beyond_cdr_period);
 		my %cdr_per_pricing_rule;
 		while(my $cdr = $sth->fetchrow_hashref) {
-			$cdr_per_pricing_rule{$cdr->{'pricing_id'}} ||= [];
-			push @{$cdr_per_pricing_rule{$cdr->{'pricing_id'}}}, $cdr;
+			my $pricing_id = $cdr->{'pricing_id'};
+			if($cdr->{'pricing_id_two'}) {
+				$pricing_id .= "," . $cdr->{'pricing_id_two'};
+			}
+			$cdr_per_pricing_rule{$pricing_id} ||= [];
+			push @{$cdr_per_pricing_rule{$pricing_id}}, $cdr;
 			$dbh->do("UPDATE cdr SET invoice_id=? WHERE id=?", undef, $invoice_id, $cdr->{'id'});
 		}
 
 		my %month_to_number_to_data_cdrs;
 		foreach(reverse sort keys %cdr_per_pricing_rule) {
-			my $pricing = $get_pricing->($_);
+			my $pricing;
+			my $pricing_two;
+			if(/^(\d+),(\d+)$/) {
+				$pricing = $get_pricing->($1);
+				$pricing_two = $get_pricing->($2);
+			} else {
+				$pricing = $get_pricing->($_);
+			}
+			my @cdrs = @{$cdr_per_pricing_rule{$_}};
 
 			if($pricing->{'service'} eq "SMS") {
-				my $num = @{$cdr_per_pricing_rule{$_}};
+				my $num = @cdrs;
 				my $price_per_line = $pricing->{'price_per_line'};
 				my $description = sprintf("%s", $pricing->{'description'});
 				$normal_itemline->($invoice_id, $description, $num, $price_per_line, $pricing->{'service'});
@@ -505,20 +517,25 @@ sub generate_invoice {
 				my $sum_units = 0;
 				my $sum_prices = 0;
 				my $number_of_lines = 0;
-				foreach(@{$cdr_per_pricing_rule{$_}}) {
+				foreach(@cdrs) {
 					$number_of_lines += 1;
 					$sum_units += $_->{'units'};
 					$sum_prices += $_->{'computed_price'};
 				}
 				my $description = "Bellen " . $pricing->{'description'};
+				my $p2hidden = 1;
+				if($pricing_two) {
+					$description .= " - " . $pricing_two->{'description'};
+					$p2hidden = $pricing_two->{'hidden'};
+				}
 
-				if($pricing->{'hidden'} && $sum_prices == 0) {
+				if($pricing->{'hidden'} && $p2hidden && $sum_prices == 0) {
 					# hide this itemline
 				} else {
 					$duration_itemline->($invoice_id, $description, $sum_prices, $number_of_lines, $sum_units, $pricing);
 				}
 			} elsif($pricing->{'service'} eq "DATA" && (!$pricing->{'source'} || $pricing->{'source'}[0] eq "Netherlands - Mobile - SpeakUp")) {
-				foreach my $cdr (@{$cdr_per_pricing_rule{$_}}) {
+				foreach my $cdr (@cdrs) {
 					my ($month) = $cdr->{'time'} =~ /^(\d{4}-\d{2})-\d{2} [\d:]+$/;
 					if(!$month) {
 						die "Could not parse CDR timestamp: " . $cdr->{'time'};
@@ -531,7 +548,7 @@ sub generate_invoice {
 			} elsif($pricing->{'service'} eq "DATA") {
 				# Roaming data use: use price-per-unit as in database
 				my $sum_units = 0;
-				foreach(@{$cdr_per_pricing_rule{$_}}) {
+				foreach(@cdrs) {
 					$sum_units += $_->{'units'};
 				}
 				my $description = $pricing->{'description'};

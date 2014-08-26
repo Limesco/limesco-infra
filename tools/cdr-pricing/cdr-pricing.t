@@ -69,6 +69,7 @@ for_every_unpriced_cdr($lim, sub {
 		speakup_account => "suaccount",
 		time => "2012-01-02 01:00:00",
 		pricing_id => undef,
+		pricing_id_two => undef,
 		pricing_info => undef,
 		computed_cost => undef,
 		computed_price => undef,
@@ -161,6 +162,7 @@ is_deeply($cdr, {
 	speakup_account => "suaccount",
 	time => "2012-01-02 01:00:00",
 	pricing_id => $pricing_id,
+	pricing_id_two => undef,
 	computed_cost => 51, # 1 per line, 10 per unit, 5 units
 	computed_price => 102, # 2 per line, 20 per unit, 5 units
 	invoice_id => undef,
