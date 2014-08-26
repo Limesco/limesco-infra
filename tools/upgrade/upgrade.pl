@@ -117,7 +117,7 @@ Returns the latest schema version supported by this tool.
 =cut
 
 sub get_latest_schema_version {
-	return 8;
+	return 9;
 }
 
 =head3 update_schema_version($lim, $dbh, $version)
@@ -374,6 +374,8 @@ sub initialize_database {
 			time TIMESTAMP NOT NULL,
 
 			pricing_id BIGINT NULL REFERENCES pricing(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
+			pricing_id_two BIGINT NULL REFERENCES pricing(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
+			CHECK (pricing_id IS NOT NULL OR pricing_id_two IS NULL),
 			pricing_info JSON NULL,
 			CHECK (pricing_id IS NULL OR pricing_info IS NOT NULL),
 			CHECK (pricing_id IS NOT NULL OR pricing_info IS NULL),
@@ -489,7 +491,15 @@ sub upgrade_database {
 			$current_version = 8;
 		}
 
-		if($current_version > 8) {
+		if($current_version == 8) {
+			$dbh->do("ALTER TABLE cdr ADD COLUMN pricing_id_two BIGINT NULL REFERENCES pricing(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED");
+			$dbh->do("ALTER TABLE cdr ADD CHECK (pricing_id IS NOT NULL OR pricing_id_two IS NULL)");
+
+			update_schema_version($lim, $dbh, 9);
+			$current_version = 9;
+		}
+
+		if($current_version > 9) {
 			die "Not implemented";
 		}
 
