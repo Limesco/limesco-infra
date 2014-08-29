@@ -16,6 +16,15 @@ our $account = \%account;
 \usepackage{tabularx}
 \usepackage{longtable}
 
+\newenvironment{nscenter}
+ {\parskip=0pt\par\nopagebreak\centering}
+ {\par\noindent\ignorespacesafterend}
+
+\newenvironment{nospaceflalign*}
+ {\setlength{\abovedisplayskip}{0pt}\setlength{\belowdisplayskip}{0pt}%
+  \csname flalign*\endcsname}
+ {\csname endflalign*\endcsname\ignorespacesafterend}
+
 \newcommand{\totaalbedrag}{\footnotesize{Het totaalbedrag inclusief BTW dient te worden voldaan binnen 14 kalenderdagen na de
 factuurdatum (\beginperl my ($y, $m, $d) = $invoice->{'date'} =~ /^(20\d\d)-(\d\d)-(\d\d)/; $OUT .= "$d-$m-$y"; \endperl).
 Indien er vragen, opmerkingen of klachten zijn over deze factuur, kun je ons
@@ -26,6 +35,7 @@ vermelding van het factuurnummer (\beginperl $invoice->{'id'} \endperl).}}
 \makeevenfoot{factuur}{}{\totaalbedrag \\ Pagina \thepage}{}
 \makeoddfoot{factuur}{}{\totaalbedrag \\ Pagina \thepage}{}
 
+\mathindent=0pt
 
 \begin{document}
 \pagestyle{factuur}
@@ -33,8 +43,8 @@ vermelding van het factuurnummer (\beginperl $invoice->{'id'} \endperl).}}
 {\LARGE
 Limesco B.V. \\
 }
-Sophiaweg 34 \\
-6523 NJ  Nijmegen \\
+Toernooiveld 120 \\
+6525 EC  Nijmegen \\
 \end{flushright}
 
 \begin{flushright}
@@ -51,17 +61,17 @@ Factuurdatum & \beginperl formatDate($invoice->{'date'}) \endperl
 \end{tabular}
 \end{flushright}
 
-\begin{flalign*} \beginperl if( $account->{'company_name'} ) { $OUT .= '
+\begin{nospaceflalign*} \beginperl if( $account->{'company_name'} ) { $OUT .= '
 \mbox{Bedrijf}       &: \mbox{'.$account->{'company_name'}.'}' } \endperl \\
 \mbox{Naam}          &: \mbox{\beginperl $account->{'first_name'} . " " . $account->{'last_name'} \endperl} \\
 \mbox{Adres}         &: \mbox{\beginperl $account->{'street_address'} \endperl} \\
 \mbox{Postcode}      &: \mbox{\beginperl $account->{'postal_code'} \endperl} \\
 \mbox{Plaats}        &: \mbox{\beginperl $account->{'city'} \endperl} \\
-\end{flalign*}
+\end{nospaceflalign*}
 
-\begin{center}
+\begin{nscenter}
 \line(1,0){500}
-\end{center}
+\end{nscenter}
 
 \newcolumntype{R}{>{\raggedleft\arraybackslash}X}
 \newcolumntype{A}{>{\raggedleft\arraybackslash}p{3.0cm}}
