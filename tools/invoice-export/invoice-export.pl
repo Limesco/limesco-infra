@@ -14,6 +14,8 @@ use Email::Sender::Transport::SMTP;
 use Email::Sender::Simple qw(sendmail);
 use v5.14; # Unicode string features
 use open qw( :encoding(UTF-8) :std);
+use locale;
+use POSIX qw(locale_h);
 
 # get_account
 do '../account-change/account-change.pl' unless UNIVERSAL::can('main', "get_account");
@@ -86,6 +88,13 @@ if(!caller) {
 
 	my $invoice = get_invoice($lim, $invoice_id);
 	my $pdf_content;
+
+	# Let's set LC_NUMERIC to the desired format, since Perl defaults to LC_NUMERIC="C" :-(
+	if ($lim->{'config'}->{'locale'}->{'lc_numeric'}) {
+		setlocale(LC_NUMERIC, $lim->{'config'}->{'locale'}->{'lc_numeric'});
+	} else {
+		warn "Lo, and behold! Your LC_NUMERIC might not be in your desired format: LC_NUMERIC=".setlocale(LC_NUMERIC)."\n";
+	}
 
 	if($filename) {
 		my $content;

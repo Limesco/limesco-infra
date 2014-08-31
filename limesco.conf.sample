@@ -22,3 +22,6 @@ blind_cc=sjors@limesco.nl
 ;uri_base=
 ;username=
 ;password=
+
+[locale]
+;lc_numeric=nl_NL.UTF-8
