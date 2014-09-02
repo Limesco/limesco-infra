@@ -73,9 +73,9 @@ if(!caller) {
 
 		my @auths = get_active_directdebit_authorizations($lim);
 		foreach my $authorization (@auths) {
-			my @invoices = select_directdebit_invoices($lim, $authorization->{'id'});
+			my @invoices = select_directdebit_invoices($lim, $authorization->{'authorization_id'});
 			foreach my $invoice (@invoices) {
-				create_directdebit_transaction($lim, $authorization->{'id'}, $invoice);
+				create_directdebit_transaction($lim, $authorization->{'authorization_id'}, $invoice);
 			}
 		}
 		try {
