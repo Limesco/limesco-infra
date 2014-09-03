@@ -176,7 +176,8 @@ sub get_account_like {
 	my @words = split /\s/, $string;
 	my @accounts;
 	my $sth = $dbh->prepare("SELECT id, concat(company_name, ' ', first_name, ' ', last_name, ' ',
-		first_name, ' ', company_name, ' ', last_name, ' ', company_name), period FROM account");
+		first_name, ' ', company_name, ' ', last_name, ' ', company_name), period,
+		first_name, last_name, company_name FROM account");
 	$sth->execute();
 	while(my $row = $sth->fetchrow_arrayref()) {
 		push @accounts, [@$row];
@@ -195,7 +196,7 @@ sub get_account_like {
 	} else {
 		my $error = "Multiple accounts match '$string'\n";
 		foreach(@accounts) {
-			$error .= sprintf("% 4d %15s  %s\n", $_->[0], $_->[2], $_->[1]);
+			$error .= sprintf("% 4d %15s  %s %s %s\n", $_->[0], $_->[2], $_->[3], $_->[4], $_->[5]);
 		}
 		die $error;
 	}
