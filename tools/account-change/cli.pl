@@ -10,6 +10,7 @@ do 'account-change.pl' or die $!;
 do '../sim-change/sim-change.pl' or die $!;
 do '../invoice-export/invoice-export.pl' or die $!;
 do '../directdebit/directdebit.pl' unless UNIVERSAL::can("main", "generate_directdebit_authorization") or die $!;
+do '../directdebit/bic-convert.pl' or die $!;
 
 my $lim = Limesco->new_from_args(\@ARGV);
 my $shell = LimescoShell->new($lim);
@@ -676,9 +677,18 @@ sub cli_add_directdebit_authorization {
 		}
 		return $_[0];
 	});
-	my $bank_account_name = ask_question("Bank account name?");
-	my $iban = ask_question("IBAN?");
-	my $bic = ask_question("BIC?");
+	my $bank_account_name = ask_question("Name of bank account holder?");
+	my $iban = ask_question("IBAN?", sub {
+		if (!::iban_check($_[0])) {
+			undef $_[0];
+		}
+		return $_[0];
+	});
+	my $proposedbic = ::iban_to_bic($iban);
+	print ">>> BIC suggested: [".$proposedbic."].\n";
+	my $confirmbic = ask_question("Enter 'yes' to accept suggestion or fill in BIC manually:");
+	my $bic = ($confirmbic eq "yes") ? $proposedbic : $confirmbic;
+	print ">>> BIC entered: ".$bic."\n";
 	my $date = ask_question("Signature date (YYYY-MM-DD)?");
 	return ::add_directdebit_account($lim, $self->{'account'}{'id'},
 		$authorization_id, $bank_account_name, $iban, $bic, $date);
