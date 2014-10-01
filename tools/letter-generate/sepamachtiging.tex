@@ -33,6 +33,7 @@
 
 \subsection*{Gegevens gebruiker}
 \begin{itemize}[leftmargin=0pt,label={},itemsep=-4pt]
+\beginperl "\\item Bedrijfsnaam: ".$account{'company_name'} if ($account{'company_name'}); \endperl
 \item Naam: \mbox{\beginperl $account{'first_name'} . " " . $account{'last_name'} \endperl}
 \item Straat + huisnummer: \mbox{\beginperl $account{'street_address'} \endperl}
 \item Postcode + plaats: \mbox{\beginperl $account{'postal_code'} . " " . $account{'city'} \endperl}
