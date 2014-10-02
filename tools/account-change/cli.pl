@@ -106,11 +106,12 @@ sub prompt_str {
 }
 
 sub run_account {
-	my ($self, $search) = @_;
-	if(@_ != 2 || !$search) {
+	my ($self, $search, $date) = @_;
+	if(@_ < 2 || !$search) {
 		warn help_account();
 		return;
 	}
+	$date ||= 'today';
 
 	if($self->{queued_changes}) {
 		warn "Cannot select account when changes are queued. Use 'commit' or 'rollback' first.\n";
@@ -122,9 +123,9 @@ sub run_account {
 
 	try {
 		if($search =~ /^\d+$/) {
-			$self->{account} = $self->{lim}->get_account($search);
+			$self->{account} = $self->{lim}->get_account($search, $date);
 		} else {
-			$self->{account} = $self->{lim}->get_account_like($search);
+			$self->{account} = $self->{lim}->get_account_like($search, $date);
 		}
 	} catch {
 		warn $_;
@@ -133,11 +134,12 @@ sub run_account {
 
 sub help_account {
 	return <<HELP;
-account <id|string>
+account <id|string> [date]
 
 Selects an account. You can give an ID to immediately select that account, or
 give a single string to search through accounts. If multiple accounts match the
-search string, a list is given and the current account is deselected.
+search string, a list is given and the current account is deselected. The
+optional parameter date can be used to search from a specific date onwards.
 HELP
 }
 
