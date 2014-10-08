@@ -474,7 +474,7 @@ sub comp_invoice {
 }
 
 sub run_invoice {
-	my ($self, $invoice_id) = @_;
+	my ($self, $invoice_id, $email) = @_;
 	if(!$invoice_id && !$self->{'account'}) {
 		warn "Select an account to list its invoices, or give an invoice ID to dump its information.\n";
 		return;
@@ -497,6 +497,21 @@ sub run_invoice {
 			warn "Could not retrieve this invoice: $_\n";
 		};
 		return if(!$invoice);
+
+		if ($email) {
+			my $filename = "$invoice_id.pdf";
+			try {
+				# TODO: configuration option for invoice TeX template
+				my $pdf = ::generate_invoice_pdf($lim, $invoice, '../invoice-export/invoice-template.tex');
+				::send_pdf_by_email($lim, $pdf, $filename, "Liminfra invoice $invoice_id",
+					"Attached to this e-mail is your requested invoice: $invoice_id.",
+					"Liminfra user", $email);
+			} catch {
+				warn "Failed to generate and send PDF for invoice $invoice_id: $_\n";
+			};
+			return;
+		}
+
 		if($self->{'account'} && $invoice->{'account_id'} != $self->{'account'}{'id'}) {
 			warn "Refusing to list this invoice: it does not belong to the selected account.\n";
 			warn "Deselect the current account using 'back' to list this invoice.\n";
@@ -533,10 +548,12 @@ sub run_invoice {
 
 sub help_invoice {
 	return <<HELP;
-invoice [invoiceid]
+invoice [invoiceid] [email address]
 
-List information about given invoice. If no invoice name is given, give
-a list of invoices for the selected account if there is one.
+List information about given invoice and, optionally, send a
+PDF of that invoice to the specified e-mail address. If no
+invoice name is given, give a list of invoices for the
+selected account if there is one.
 HELP
 }
 
