@@ -286,6 +286,10 @@ sub send_invoice_by_email {
 		SOURCE => $tfh,
 	);
 	close $tfh;
+
+	# Denote the invoice amount with a comma, should probably be fixed with correct locale
+	$invoice->{'rounded_with_taxes'} =~ s/\./,/;
+
 	my $body = $t->fill_in(HASH => {account => $account, invoice => $invoice, payment_url => $btc_url});
 	if(!defined($body)) {
 		die "Failed to generate e-mail body: $Text::Template::ERROR\n";
