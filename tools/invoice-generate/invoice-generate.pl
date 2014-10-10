@@ -380,8 +380,8 @@ sub generate_invoice {
 		}
 
 		# Add monthly SIM costs as of invoice date
-		$sth = $dbh->prepare("SELECT * FROM sim WHERE owner_account_id=? AND period @> ?::date AND state='ACTIVATED'");
-		$sth->execute($account_id, $date->ymd);
+		$sth = $dbh->prepare("SELECT * FROM sim LEFT JOIN phonenumber ON (sim.iccid = phonenumber.sim_iccid) WHERE owner_account_id=? AND sim.period @> ?::date AND phonenumber.period @> ?::date AND state='ACTIVATED'");
+		$sth->execute($account_id, $date->ymd, $date->ymd);
 		while(my $sim = $sth->fetchrow_hashref) {
 			# Start of monthly cost invoicing: first of month after last invoiced month
 			# If SIM was never invoiced, it's the activation date
@@ -418,13 +418,13 @@ sub generate_invoice {
 				my $sim_monthly_price_description;
 				my $sim_monthly_price;
 				if($sim->{'data_type'} eq "APN_500MB") {
-					$sim_monthly_price_description = "Vaste kosten (500 MB-bundel)";
+					$sim_monthly_price_description = "Vaste kosten (500 MB-bundel)\n $sim->{'phonenumber'}\n SIM: $sim->{'iccid'}";
 					$sim_monthly_price = $SIM_APN_500_MB_MONTHLY_PRICE;
 				} elsif($sim->{'data_type'} eq "APN_2000MB") {
-					$sim_monthly_price_description = "Vaste kosten (2000 MB-bundel)";
+					$sim_monthly_price_description = "Vaste kosten (2000 MB-bundel)\n $sim->{'phonenumber'}\n SIM: $sim->{'iccid'}";
 					$sim_monthly_price = $SIM_APN_2000_MB_MONTHLY_PRICE;
 				} elsif($sim->{'data_type'} eq "APN_NODATA") {
-					$sim_monthly_price_description = "Vaste kosten";
+					$sim_monthly_price_description = "Vaste kosten\n $sim->{'phonenumber'}\n SIM: $sim->{'iccid'}";
 					$sim_monthly_price = $SIM_NO_DATA_MONTHLY_PRICE;
 				} else {
 					die "Unknwon data type: " . $sim->{'data_type'};
@@ -444,7 +444,7 @@ sub generate_invoice {
 
 				# Liquid Pricing
 				if(!$sim->{'exempt_from_cost_contribution'}) {
-					$description = "Liquid Pricing\n" . $invoicing_month->ymd . " - " . $end_of_this_period->ymd;
+					$description = "Liquid Pricing\n $sim->{'phonenumber'}\n SIM: $sim->{'iccid'}\n" . $invoicing_month->ymd . " - " . $end_of_this_period->ymd;
 					$normal_itemline->($invoice_id, $description, 1, $LIQUID_PRICING_PER_SIM * $factor);
 				}
 
