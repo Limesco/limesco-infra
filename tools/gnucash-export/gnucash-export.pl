@@ -155,7 +155,8 @@ sub print_invoices {
 			printf("!Account\nN%s\nTOth A\n^\n", $invoice->{full_name});
 			print "!Type:Oth A\n";
 
-			if (abs($invoice_diff) > 0) {
+			if (sprintf("%.2f", $invoice_diff) !~ /-?0.00/) {
+				warn "invoice diff: $invoice_diff vs ".sprintf("%.2f", $invoice_diff)."\n";
 				printf("D%s\nT%s\nMFactuur %s\nSKlanten\n\$%s\nSBTW-hoog\n\$%.2f\nSImbalance\n\$%.2f\n^\n",
 					$invoice->{date},
 					$invoice->{rounded_with_taxes},
@@ -204,7 +205,9 @@ sub get_all_directdebit {
 			LEFT OUTER JOIN directdebit_transaction dt ON (df.id = dt.directdebit_file_id)
 			LEFT OUTER JOIN invoice ON (invoice.id = dt.invoice_id)
 			LEFT OUTER JOIN account ON (account.id = invoice.account_id)
-			WHERE df.creation_time ".$where_clause;
+			WHERE df.creation_time ".$where_clause." AND account.period @> invoice.date";
+	# `account.period @> invoice.date` is necessary to prevent duplicate entries for an
+	# account with multiple periods
 
 	my $sth = $dbh->prepare($query);
 	my $numresults = ($params == 1) ? $sth->execute($date) : $sth->execute($date, $date);
@@ -262,12 +265,13 @@ sub print_directdebit {
 		$invoice->{rounded_with_taxes} -= $num_actcosts*42 if ($num_actcosts > 0);
 		$invoice->{rounded_without_taxes} -= $num_actcosts*34.7107 if ($num_actcosts > 0);
 
-		printf("%s\t%s\t%6.2f\t%6.2f\t%d\n",
+		printf("%s\t%s\t%6.2f\t%6.2f\t%d\t%s\n",
 			$invoice->{invoice_id},
 			$invoice->{processing_date},
 			$invoice->{rounded_without_taxes},
 			$invoice->{rounded_with_taxes},
-			$num_actcosts) if ($invoice->{rounded_with_taxes} and $format eq "plain");
+			$num_actcosts,
+			$invoice->{full_name}) if ($invoice->{rounded_with_taxes} and $format eq "plain");
 
 		if ($format eq "qif") {
 			if ($invoice->{rounded_with_taxes}) {
