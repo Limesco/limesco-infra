@@ -206,7 +206,7 @@ Generate a .tex file using invoice information and a TeX template filename.
 
 sub generate_invoice_tex {
 	my ($lim, $invoice, $template) = @_;
-	my $account = get_account($lim, $invoice->{'account_id'});
+	my $account = get_account($lim, $invoice->{'account_id'}, $invoice->{'date'});
 	my $objects = {
 		invoice => $invoice,
 		account => $account,
@@ -222,7 +222,7 @@ Generate a .pdf file using invoice information and a TeX template filename.
 
 sub generate_invoice_pdf {
 	my ($lim, $invoice, $filename) = @_;
-	my $account = get_account($lim, $invoice->{'account_id'});
+	my $account = get_account($lim, $invoice->{'account_id'}, $invoice->{'date'});
 	my $objects = {
 		invoice => $invoice,
 		account => $account,
