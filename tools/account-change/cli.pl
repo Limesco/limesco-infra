@@ -397,7 +397,13 @@ sub run_info {
 		$what = "account" if($self->{'account'});
 		$what = "sim" if($self->{'sim'});
 		if(!$what) {
-			print "Info about what? Select an account or SIM first.\n";
+			print "No account or SIM selected, listing all accounts.\n";
+			my @account = sort {$a->{'first_name'} cmp $b->{'first_name'}} ::list_accounts($lim);
+			foreach my $acc (@account) {
+				print "(" . $acc->{'id'} . ")\t" . $acc->{'first_name'} . " " . $acc->{'last_name'};
+				print "\n\t(" . $acc->{'company_name'} . ")" if ($acc->{'company_name'});
+				print "\n";
+			}
 			return;
 		}
 	}
@@ -442,7 +448,8 @@ sub help_info {
 	return <<HELP;
 info [sim|account|directdebit]
 
-Give information about the currently selected SIM or account.
+Give information about the currently selected SIM or account or print all
+active accounts when no argument is given.
 HELP
 }
 
@@ -706,7 +713,7 @@ sub cli_add_directdebit_authorization {
 	my $proposedbic = ::iban_to_bic($iban);
 	print ">>> BIC suggested: [".$proposedbic."].\n";
 	my $confirmbic = ask_question("Enter 'yes' to accept suggestion or fill in BIC manually:");
-	my $bic = ($confirmbic eq "yes") ? $proposedbic : $confirmbic;
+	my $bic = ($confirmbic eq lc("yes")) ? $proposedbic : $confirmbic;
 	print ">>> BIC entered: ".$bic."\n";
 	my $date = ask_question("Signature date (YYYY-MM-DD)?");
 	return ::add_directdebit_account($lim, $self->{'account'}{'id'},
