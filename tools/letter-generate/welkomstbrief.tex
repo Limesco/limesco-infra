@@ -21,10 +21,10 @@
 \begin{minipage}{\linewidth}
     \noindent \begin{minipage}{0.60\linewidth}
     \vspace{3cm}
+    \beginperl if ($account{'company_name'}) { $account{'company_name'} . " \\\\\n t.a.v. "; } \endperl
     \beginperl $account{'first_name'} . " " . $account{'last_name'} \endperl \\
     \beginperl $account{'street_address'} \endperl \\
     \beginperl $account{'postal_code'} . " " . $account{'city'} \endperl \\
-    Nederland
     \vspace{2cm}
 
     Datum: \beginperl formatDate($date) \endperl \\
