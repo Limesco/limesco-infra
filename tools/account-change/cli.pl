@@ -404,6 +404,7 @@ sub run_info {
 				print "\n\t(" . $acc->{'company_name'} . ")" if ($acc->{'company_name'});
 				print "\n";
 			}
+			print "Total: " . scalar @account . "\n";
 			return;
 		}
 	}
@@ -830,7 +831,7 @@ sub run_changes {
 		print " (no actual changes)\n" if keys %$changeset == 0;
 		print "\n" if keys %$changeset > 1;
 
-		foreach my $key (keys %$changeset) {
+		foreach my $key (sort keys %$changeset) {
 			my $value = $changeset->{$key};
 			$value = "(undef)" if(!defined($value));
 			print "  $key => $value\n";
