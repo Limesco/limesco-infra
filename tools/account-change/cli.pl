@@ -1149,3 +1149,74 @@ HELP
 sub smry_letter {
 	return "generate and e-mail welcome letters";
 }
+
+sub run_queue {
+	my ($self, $cmd, $description, $count, $price, $taxrate) = @_;
+	if(!$self->{'account'}) {
+		warn "An account must be selected to use this command.";
+		return;
+	}
+
+	if(!$cmd) {
+		warn help_queue();
+		return;
+	}
+
+	my $dbh = $lim->get_database_handle();
+
+	if ($cmd eq "list") {
+		my $sql = "SELECT * FROM invoice_itemline WHERE queued_for_account_id = ? AND invoice_id IS NULL";
+		my $sth = $dbh->prepare($sql);
+		$sth->execute($self->{'account'}{'id'});
+		while(my $row = $sth->fetchrow_hashref()) {
+			printf("%s\n\tCount: %.2f\n\tPrice: %.4f\n\tTotal: %.2f\n", $row->{'description'},
+				$row->{'item_count'}, $row->{'item_price'}, $row->{'rounded_total'});
+		}
+
+	} elsif ($cmd eq "add") {
+		$taxrate ||= 0.21;
+
+		warn "Item count must be positive.\n" if ($count < 0);
+		return if ($count < 0);
+
+		warn "Tax rate should be between 0 and 1.\n" if ($taxrate < 0 || $taxrate > 1);
+		return if ($taxrate < 0 || $taxrate > 1);
+
+		my $total_amount = $count * $price;
+
+		print "Description : " . $description . "\n";
+		print "Item count  : " . $count . "\n";
+		print "Item price  : " . $price . "\n";
+		print "Tax rate    : " . $taxrate . "\n";
+		print "Total amount: " . $total_amount . "\n";
+		print "Rounded     : " . sprintf("%.2f", $total_amount) . "\n";
+
+		my $confirminput = ask_question(">>> Please confirm insertion with 'yes':");
+		my $input = ($confirminput eq lc("yes")) ? 1 : 0;
+		if ($input != 1) {
+			warn "Insertion not confirmed, returning to shell...\n";
+			return
+		}
+		my $sth = $dbh->prepare("INSERT INTO invoice_itemline (type, queued_for_account_id, description,
+			item_count, item_price, taxrate, rounded_total) VALUES ('NORMAL', ?, ?, ?, ?, ?, ?);");
+		$sth->execute($self->{'account'}{'id'}, $description, $count, $price, $taxrate, sprintf("%.2f", $total_amount));
+	}
+}
+
+sub help_queue {
+	return <<HELP;
+queue list
+queue add [description] [item count] [item price] [tax rate]
+
+List all queued itemlines for an account.
+
+Add a queued itemline for the selected account. That item will be added to the
+next invoice. If [tax rate] is omitted, the default value of 0.21 (21%) will be
+used. [item count] must be positive. [item price] may be negative.
+
+HELP
+}
+
+sub smry_queue {
+	return "list and add queued itemlines";
+}
