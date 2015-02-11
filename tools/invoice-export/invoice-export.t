@@ -23,10 +23,10 @@ require('../upgrade/upgrade.pl');
 initialize_database($lim);
 
 $dbh->do("INSERT INTO account (id, period, first_name, last_name,
-	street_address, postal_code, city, email)
+	street_address, postal_code, city, email, contribution)
 	VALUES (NEXTVAL('account_id_seq'), '(,)', 'First Name',
 	'Last Name', 'Street Address 123', '9876 BA', 'City Name',
-	'test\@test.org');");
+	'test\@test.org', 2);");
 
 my $account_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "account_id_seq"});
 

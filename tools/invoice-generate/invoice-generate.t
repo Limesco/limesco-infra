@@ -67,6 +67,7 @@ my $account = create_account($lim, {
 	postal_code => "Postal Code",
 	city => "City",
 	email => 'test@limesco.nl',
+	contribution => 2,
 }, '2014-08-01');
 
 is_deeply([get_all_active_account_ids($lim, '2014-07-29')], [], "No active accounts yet");
