@@ -190,6 +190,32 @@ sub get_partial_month_factor {
 	return ($end_date->day - $start_date->day) / ($last_date->day - $first_date->day);
 }
 
+=head3 get_account_start_date($dbh, $account_id)
+
+Use the given database handle to figure out when an account was created.
+Returns a DateTime-compatible object pointing to sometime during the day the
+account was created. Returns undef if the account didn't exist.
+
+=cut
+
+sub get_account_start_date {
+	my ($dbh, $account_id) = @_;
+	my $sth = $dbh->prepare("SELECT lower(period) FROM account WHERE id=? ORDER BY period ASC LIMIT 1");
+	$sth->execute($account_id);
+	my $account = $sth->fetchrow_arrayref();
+	if(!$account) {
+		return;
+	}
+	my ($startyear, $startmonth, $startday) = $account->[0] =~ /^(\d{4})-(\d\d)-(\d\d)$/;
+	if(!$startday) {
+		die "Could not parse account activation date: " . $account->[0];
+	}
+	return DateTime->new(
+		year => $startyear,
+		month => $startmonth,
+		day => $startday,
+	);
+}
 
 =head3 get_sim_contract_start_date($dbh, $iccid)
 
@@ -311,7 +337,6 @@ sub generate_invoice {
 	my $SIM_NO_DATA_MONTHLY_PRICE =      2.8926;
 	my $SIM_APN_500_MB_MONTHLY_PRICE =  13.8843;
 	my $SIM_APN_2000_MB_MONTHLY_PRICE = 23.8843;
-	my $LIQUID_PRICING_PER_SIM =  3.0992;
 	my $DATA_USAGE_TIER1_PER_MB = 0.0248;
 	my $DATA_USAGE_TIER2_PER_MB = 0.0165;
 	my $DATA_USAGE_TIER3_PER_MB = 0.0083;
@@ -365,24 +390,58 @@ sub generate_invoice {
 		# on the table, so if we find one here it will be ours
 		my $invoice_id = find_next_invoice_id($dbh, $date);
 
+		my $account = get_account($dbh, $account_id, $date);
+
 		# Add activation costs for all unactivated SIMs
 		my $sth = $dbh->prepare("SELECT * FROM sim WHERE owner_account_id=? AND activation_invoice_id IS NULL AND state != 'DISABLED' AND period @> ?::date");
 		$sth->execute($account_id, $date);
 		while(my $sim = $sth->fetchrow_hashref) {
-			# TODO: this calls die() when $date is already a 'history record' (i.e. there
-			# is a planned update for this SIM after $date); this can be made more robust
-			# by implementing 'history changing support' in update_sim so that it is able
-			# to update all records starting with $date into infinity.
 			update_sim($dbh, $sim->{'iccid'}, {
 				activation_invoice_id => $invoice_id,
 			}, $date);
 			$normal_itemline->($invoice_id, "Activatie SIM-kaart", 1, $SIM_CARD_ACTIVATION_PRICE);
 		}
 
+		# Prepare contribution calculation: establish the last contribution invoicing date
+		my $contribution_start;
+		my @contribution_months;
+		my $CONTRIBUTION_GLOBAL_START = DateTime->new(year => 2015, month => 1, day => 31);
+		if($account->{'last_contribution_month'}) {
+			my ($year, $month, $day) = $account->{'last_contribution_month'} =~ /^(\d{4})-(\d\d)-(\d\d)$/;
+			$contribution_start = DateTime->new(year => $year, month => $month, day => $day);
+		} else {
+			$contribution_start = get_account_start_date($dbh, $account->{'id'});
+			if($contribution_start < $CONTRIBUTION_GLOBAL_START) {
+				$contribution_start = $CONTRIBUTION_GLOBAL_START;
+			}
+		}
+
 		# Add monthly SIM costs as of invoice date
 		$sth = $dbh->prepare("SELECT * FROM sim LEFT JOIN phonenumber ON (sim.iccid = phonenumber.sim_iccid) WHERE owner_account_id=? AND sim.period @> ?::date AND phonenumber.period @> ?::date AND state='ACTIVATED'");
 		$sth->execute($account_id, $date->ymd, $date->ymd);
 		while(my $sim = $sth->fetchrow_hashref) {
+			# Per-account contribution invoicing: this is checked per SIM, as it is only
+			# invoiced for accounts that had active SIMs on the first of the month
+			my $contribution_month = first_day_of_next_month($contribution_start);
+			until($contribution_month > $date) {
+				my $already_invoiced = 0;
+				for my $paid_month (@contribution_months) {
+					if($paid_month == $contribution_month) {
+						$already_invoiced = 1;
+						last;
+					}
+				}
+				my $sim_start_date = get_sim_contract_start_date($dbh, $sim->{'iccid'});
+				if(!$already_invoiced && $sim_start_date <= $contribution_month) {
+					if($account->{'contribution'} > 0) {
+						my $description = "Vrije bijdrage " . $contribution_month->ymd;
+						$normal_itemline->($invoice_id, $description, 1, $account->{'contribution'});
+					}
+					push @contribution_months, $contribution_month;
+				}
+				$contribution_month = first_day_of_next_month($contribution_month);
+			}
+
 			# Start of monthly cost invoicing: first of month after last invoiced month
 			# If SIM was never invoiced, it's the activation date
 			my $monthly_cost_start;
@@ -442,12 +501,6 @@ sub generate_invoice {
 				$description .= $invoicing_month->ymd . " - " . $end_of_this_period->ymd;
 				$normal_itemline->($invoice_id, $description, 1, $sim_monthly_price * $factor);
 
-				# Liquid Pricing
-				if(!$sim->{'exempt_from_cost_contribution'}) {
-					$description = "Liquid Pricing\n $sim->{'phonenumber'}\n SIM: $sim->{'iccid'}\n" . $invoicing_month->ymd . " - " . $end_of_this_period->ymd;
-					$normal_itemline->($invoice_id, $description, 1, $LIQUID_PRICING_PER_SIM * $factor);
-				}
-
 				$invoicing_month = $end_of_this_period->add(days => 1);
 			}
 			# TODO: this calls die() when $date is already a 'history record' (i.e. there
@@ -459,6 +512,11 @@ sub generate_invoice {
 				last_monthly_fees_month => $date,
 			}, $date);
 		}
+
+		update_account($dbh, $account->{'id'}, {
+			last_contribution_month => $date,
+		}, $date);
+		$account->{'last_contribution_month'} = $date;
 
 		my %pricings;
 		my $get_pricing = sub {

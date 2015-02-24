@@ -12,7 +12,7 @@ use Try::Tiny;
 use DateTime;
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 30;
+plan tests => 45;
 
 require_ok("invoice-generate.pl");
 
@@ -205,5 +205,209 @@ is_deeply($taxline, {
 	price_per_minute => undef,
 	service => undef,
 }, "Tax line is OK");
+
+#####
+# Account contribution invoicing
+# Contribution invoicing starts at 2015-02-01 (that's already covered by the tests above)
+# Contribution invoicing is monthly, and should not happen twice for the same month
+# An account should only be invoiced in the months where it has at least one active SIM
+$account = create_account($lim, {
+	first_name => "First Name",
+	last_name => "Last Name",
+	street_address => "Street Address 22",
+	postal_code => "Postal Code",
+	city => "City",
+	email => 'test@limesco.nl',
+	contribution => 1.00, # ex taxes
+}, '2015-03-01');
+
+# Empty invoice, because there are no SIMs yet
+undef $invoice;
+undef $exception;
+try {
+	$invoice = generate_invoice($lim, $account->{'id'}, dt('2015', '04', '01'));
+} catch {
+	$exception = $_ || 1;
+};
+diag($exception) if $exception;
+ok(!$exception, "No exception thrown during generation of invoice");
+ok(!defined($invoice), "Invoice was empty");
+
+# Allocate a SIM two months after that invoice, then invoice for two months after, there should be
+# two invoiced months (and an activation fee)
+my $sim = create_sim($lim, {
+	iccid => "1234",
+	state => "STOCK",
+	puk => "8765432",
+}, '2015-04-01');
+update_sim($lim, $sim->{'iccid'}, {
+	state => "ACTIVATED",
+	owner_account_id => $account->{'id'},
+	data_type => "APN_NODATA",
+	call_connectivity_type => "OOTB",
+	exempt_from_cost_contribution => 0,
+}, '2015-06-01');
+my $phonenumber = create_phonenumber($lim, "31612345678", $sim->{'iccid'}, '2015-06-01');
+
+undef $invoice;
+undef $exception;
+try {
+	$invoice = generate_invoice($lim, $account->{'id'}, dt('2015', '07', '25'));
+} catch {
+	$exception = $_ || 1;
+};
+diag($exception) if $exception;
+ok(!$exception, "No exception thrown during generation of invoice");
+
+is($invoice, "15C000001", "Invoice was correctly generated");
+
+undef $exception;
+try {
+	my $sth = $dbh->prepare("SELECT * FROM invoice WHERE id='15C000001'");
+	$sth->execute;
+	$invoice = $sth->fetchrow_hashref;
+} catch {
+	$exception = $_ || 1;
+};
+
+ok(!$exception, "Invoice could be retrieved");
+is_deeply($invoice, {
+	id => "15C000001",
+	account_id => $account->{'id'},
+	currency => "EUR",
+	date => "2015-07-25",
+	creation_time => $invoice->{'creation_time'},
+	rounded_without_taxes => '42.49', # 34.7107 + 2 * 1.00 + 2 * 2,8926
+	rounded_with_taxes => '51.41',
+}, "Invoice created correctly");
+
+undef $exception;
+my ($month1, $month2);
+try {
+	my $sth = $dbh->prepare("SELECT * FROM invoice_itemline WHERE invoice_id='15C000001' AND description LIKE '%Vrije bijdrage%'");
+	$sth->execute;
+	$month1 = $sth->fetchrow_hashref;
+	$month2 = $sth->fetchrow_hashref;
+	if($sth->fetchrow_hashref) {
+		die "More than two contribution lines on the invoice";
+	}
+} catch {
+	$exception = $_ || 1;
+};
+
+diag($exception) if($exception);
+ok(!$exception, "No exception thrown while retrieving invoice itemlines");
+
+is_deeply($month1, {
+	id => $month1->{'id'},
+	type => "NORMAL",
+	queued_for_account_id => undef,
+	invoice_id => '15C000001',
+	description => "Vrije bijdrage 2015-06-01",
+	taxrate => '0.21000000',
+	rounded_total => '1.00',
+	base_amount => undef,
+	item_price => '1.00000000',
+	item_count => 1,
+	number_of_calls => undef,
+	number_of_seconds => undef,
+	price_per_call => undef,
+	price_per_minute => undef,
+	service => undef,
+}, "Month1 is OK");
+
+is_deeply($month2, {
+	id => $month2->{'id'},
+	type => "NORMAL",
+	queued_for_account_id => undef,
+	invoice_id => '15C000001',
+	description => "Vrije bijdrage 2015-07-01",
+	taxrate => '0.21000000',
+	rounded_total => '1.00',
+	base_amount => undef,
+	item_price => '1.00000000',
+	item_count => 1,
+	number_of_calls => undef,
+	number_of_seconds => undef,
+	price_per_call => undef,
+	price_per_minute => undef,
+	service => undef,
+}, "Month2 is OK");
+
+#####
+# Create a second SIM and check if contribution is still only invoiced once
+$sim = create_sim($lim, {
+	iccid => "1235",
+	state => "ACTIVATED",
+	puk => "8765432",
+	owner_account_id => $account->{'id'},
+	data_type => "APN_NODATA",
+	call_connectivity_type => "OOTB",
+	exempt_from_cost_contribution => 0,
+}, '2015-08-01');
+$phonenumber = create_phonenumber($lim, "31612345679", $sim->{'iccid'}, '2015-08-01');
+
+undef $invoice;
+undef $exception;
+try {
+	$invoice = generate_invoice($lim, $account->{'id'}, dt('2015', '08', '25'));
+} catch {
+	$exception = $_ || 1;
+};
+diag($exception) if $exception;
+ok(!$exception, "No exception thrown during generation of invoice");
+
+is($invoice, "15C000002", "Invoice was correctly generated");
+
+undef $exception;
+undef $month1;
+try {
+	my $sth = $dbh->prepare("SELECT * FROM invoice_itemline WHERE invoice_id='15C000002' AND description LIKE '%Vrije bijdrage%'");
+	$sth->execute;
+	$month1 = $sth->fetchrow_hashref;
+	if($sth->fetchrow_hashref) {
+		die "More than one itemline on the invoice";
+	}
+} catch {
+	$exception = $_ || 1;
+};
+
+diag($exception) if($exception);
+ok(!$exception, "No exception thrown while retrieving invoice itemlines");
+
+is_deeply($month1, {
+	id => $month1->{'id'},
+	type => "NORMAL",
+	queued_for_account_id => undef,
+	invoice_id => '15C000002',
+	description => "Vrije bijdrage 2015-08-01",
+	taxrate => '0.21000000',
+	rounded_total => '1.00',
+	base_amount => undef,
+	item_price => '1.00000000',
+	item_count => 1,
+	number_of_calls => undef,
+	number_of_seconds => undef,
+	price_per_call => undef,
+	price_per_minute => undef,
+	service => undef,
+}, "Month1 is OK");
+
+#####
+# End both SIMs and check if contribution is not invoiced anymore
+delete_sim($lim, "1234", "2015-08-28");
+delete_sim($lim, "1235", "2015-08-28");
+
+# Empty invoice, because there are no SIMs yet
+undef $invoice;
+undef $exception;
+try {
+	$invoice = generate_invoice($lim, $account->{'id'}, dt('2015', '09', '01'));
+} catch {
+	$exception = $_ || 1;
+};
+diag($exception) if $exception;
+ok(!$exception, "No exception thrown during generation of invoice");
+ok(!defined($invoice), "Invoice after SIM deactivation was empty");
 
 $dbh->disconnect();
