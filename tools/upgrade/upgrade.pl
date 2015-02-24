@@ -510,7 +510,7 @@ sub upgrade_database {
 			# have before 2015-01-28
 			$dbh->do("ALTER TABLE account ADD COLUMN contribution MONEY8 NULL");
 			$dbh->do("UPDATE account SET contribution=3.0991736");
-			$dbh->do("ALTER TABLE account ALTER COLUMN contribution MONEY8 NOT NULL");
+			$dbh->do("ALTER TABLE account ALTER COLUMN contribution SET NOT NULL");
 
 			# Add last_contribution_month. Keep it NULL, it will
 			# default to start at 2015-02-01
