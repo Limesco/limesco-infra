@@ -117,7 +117,7 @@ Returns the latest schema version supported by this tool.
 =cut
 
 sub get_latest_schema_version {
-	return 9;
+	return 10;
 }
 
 =head3 update_schema_version($lim, $dbh, $version)
@@ -180,6 +180,11 @@ sub initialize_database {
 		);");
 		$dbh->do("INSERT INTO meta (period, schema_version) values ('[today,)', ?)", undef, get_latest_schema_version());
 
+		# Monetary types
+		$dbh->do("CREATE TYPE currency AS ENUM('EUR');");
+		$dbh->do("CREATE DOMAIN money2 AS NUMERIC(12, 2);");
+		$dbh->do("CREATE DOMAIN money8 AS NUMERIC(12, 8);");
+
 		# A domain AS TEXT CONSTRAINT max_length is the fastest to
 		# insert, fastest to search through, and fastest to change the
 		# length constraint. We place a CONSTRAINT on our database
@@ -202,6 +207,10 @@ sub initialize_database {
 			email SHORTTEXT NOT NULL,
 			password_hash SHORTTEXT,
 			admin BOOLEAN NOT NULL DEFAULT FALSE,
+
+			contribution MONEY8 NOT NULL,
+			last_contribution_month DATE,
+
 			PRIMARY KEY (id, period),
 			EXCLUDE USING gist (id WITH =, period WITH &&)
 		);");
@@ -221,9 +230,6 @@ sub initialize_database {
 		$dbh->do("CREATE TYPE simdatatype AS ENUM('APN_NODATA', 'APN_500MB', 'APN_2000MB');");
 		$dbh->do("CREATE TYPE callconnectivitytype AS ENUM('OOTB', 'DIY');");
 		$dbh->do('CREATE DOMAIN invoiceid AS TEXT CHECK(VALUE ~ \'^\d\dC\d{6}$\');');
-		$dbh->do("CREATE TYPE currency AS ENUM('EUR');");
-		$dbh->do("CREATE DOMAIN money2 AS NUMERIC(12, 2);");
-		$dbh->do("CREATE DOMAIN money8 AS NUMERIC(12, 8);");
 		$dbh->do("CREATE TYPE itemlinetype AS ENUM('NORMAL', 'DURATION', 'TAX');");
 
 		$dbh->do("CREATE TABLE invoice (
@@ -499,7 +505,22 @@ sub upgrade_database {
 			$current_version = 9;
 		}
 
-		if($current_version > 9) {
+		if($current_version == 9) {
+			# Add contribution field and set it to the value Liquid Pricing used to
+			# have before 2015-01-28
+			$dbh->do("ALTER TABLE account ADD COLUMN contribution MONEY8 NULL");
+			$dbh->do("UPDATE account SET contribution=3.0991736");
+			$dbh->do("ALTER TABLE account ALTER COLUMN contribution MONEY8 NOT NULL");
+
+			# Add last_contribution_month. Keep it NULL, it will
+			# default to start at 2015-02-01
+			$dbh->do("ALTER TABLE account ADD COLUMN last_contribution_month DATE");
+
+			update_schema_version($lim, $dbh, 10);
+			$current_version = 10;
+		}
+
+		if($current_version > 10) {
 			die "Not implemented";
 		}
 

@@ -70,8 +70,8 @@ try {
 ok($exception, "Exception thrown while registering non-existing account for direct debit");
 
 $dbh->do("INSERT INTO account (id, period, first_name, last_name, street_address,
-	postal_code, city, email) values (NEXTVAL('account_id_seq'), '(,)', 'Test', 'User',
-	'', '', '', '');");
+	postal_code, city, email, contribution) values (NEXTVAL('account_id_seq'), '(,)',
+	'Test', 'User', '', '', '', '', 2);");
 my $account_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "account_id_seq"});
 my $authorization = generate_directdebit_authorization($lim);
 

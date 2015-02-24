@@ -278,6 +278,7 @@ sub cli_create_account {
 	$account->{'postal_code'} = ask_question("Postal code?");
 	$account->{'city'} = ask_question("City?");
 	$account->{'email'} = ask_question("E-mail address?");
+	$account->{'contribution'} = ask_question("Contribution amount?");
 	return ::create_account($self->{'lim'}, $account, $starting_date);
 }
 
@@ -439,6 +440,7 @@ sub run_info {
 		print "First name: " . $a->{'first_name'} . "\n";
 		print "Last name: " . $a->{'last_name'} . "\n";
 		print "E-mail address: " . $a->{'email'} . "\n";
+		print "Contribution: " . $a->{'contribution'} . "\n";
 		print "Address:\n";
 		print "  " . $a->{'street_address'} . "\n";
 		print "  " . $a->{'postal_code'} . " " . $a->{'city'} . "\n";

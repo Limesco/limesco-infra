@@ -36,6 +36,7 @@ try {
 		email => 'testemail@limesco.nl',
 		password_hash => "",
 		admin => 0,
+		contribution => '2.00000000',
 	}, '2014-02-03');
 } catch {
 	$exception = $_ || 1;
@@ -57,6 +58,8 @@ is_deeply($account, {
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => '0',
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }, "Account was fully created");
 
 undef $exception;
@@ -85,6 +88,7 @@ try {
 		email => 'testemail@limesco.nl',
 		password_hash => "",
 		admin => 0,
+		contribution => '2.00000000',
 	});
 } catch {
 	$exception = $_ || 1;
@@ -109,6 +113,7 @@ try {
 		email => 'testemail@limesco.nl',
 		password_hash => "",
 		admin => 1,
+		contribution => '2.00000000',
 	}, '2014-03-03');
 } catch {
 	$exception = $_ || 1;
@@ -129,6 +134,8 @@ is_deeply($account, {
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => '1',
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }, "Account without company name was fully created");
 
 # Account without password and admin bit
@@ -142,6 +149,7 @@ try {
 		postal_code => "Test Postal Code",
 		city => "Test City",
 		email => 'testemail@limesco.nl',
+		contribution => '2.00000000',
 	}, '2014-03-03');
 } catch {
 	$exception = $_ || 1;
@@ -161,6 +169,8 @@ is_deeply($account, {
 	email => 'testemail@limesco.nl',
 	password_hash => undef,
 	admin => '0',
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }, "Account without optional bits was fully created");
 
 # This must be the last account that is succesfully created in this test
@@ -178,6 +188,7 @@ try {
 		email => 'testemail@limesco.nl',
 		password_hash => "",
 		admin => 0,
+		contribution => '2.00000000',
 	}, '2014-02-03');
 } catch {
 	$exception = $_ || 1;
@@ -210,6 +221,7 @@ try {
 		email => 'testemail@limesco.nl',
 		password_hash => "",
 		admin => 0,
+		contribution => '2.00000000',
 	}, '2014-02-03');
 } catch {
 	$exception = $_ || 1;
@@ -233,6 +245,7 @@ try {
 		email => 'testemail@limesco.nl',
 		password_hash => "",
 		admin => 0,
+		contribution => '2.00000000',
 	}, '2014-02-03');
 } catch {
 	$exception = $_ || 1;
@@ -256,6 +269,8 @@ is_deeply(\@accounts,
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => '0',
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }, {
 	id => $accountid2,
 	period => $period2,
@@ -268,6 +283,8 @@ is_deeply(\@accounts,
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => 0,
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }, {
 	id => $accountid3,
 	period => '[2014-03-03,)',
@@ -280,6 +297,8 @@ is_deeply(\@accounts,
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => '1',
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }, {
 	id => $accountid4,
 	period => '[2014-03-03,)',
@@ -292,6 +311,8 @@ is_deeply(\@accounts,
 	email => 'testemail@limesco.nl',
 	password_hash => undef,
 	admin => '0',
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }], "list_accounts returns all four accounts just fine");
 @accounts = list_accounts($lim, "2014-02-03");
 is_deeply(\@accounts,
@@ -307,6 +328,8 @@ is_deeply(\@accounts,
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => '0',
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }], "list_accounts returns only oldest account when date is given");
 
 # Retrieving accounts with date
@@ -359,6 +382,8 @@ is_deeply(get_account($lim, $account_id), {
 	email => 'testemail@limesco.nl',
 	password_hash => undef,
 	admin => '0',
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }, "Account is still completely the same");
 
 # Partial property changes
@@ -385,6 +410,8 @@ is_deeply(get_account($lim, $account_id), {
 	email => 'testemail@limesco.nl',
 	password_hash => undef,
 	admin => '0',
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }, "Company name changed");
 
 is_deeply(get_account($lim, $account_id, '2014-03-09'), {
@@ -399,6 +426,8 @@ is_deeply(get_account($lim, $account_id, '2014-03-09'), {
 	email => 'testemail@limesco.nl',
 	password_hash => undef,
 	admin => '0',
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }, "Old account period was updated, no other changes");
 
 # See if the updates are OK
@@ -455,6 +484,8 @@ is_deeply(get_account($lim, $account_id), {
 	email => 'testmailtwo@limesco.nl',
 	password_hash => undef,
 	admin => 1,
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }, "Two properties changed");
 
 # Another property at the same date
@@ -482,6 +513,8 @@ is_deeply(get_account($lim, $account_id), {
 	email => 'testmailtwo@limesco.nl',
 	password_hash => undef,
 	admin => 0,
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }, "Two properties changed");
 
 # account_changes_between should act fine now too
@@ -539,6 +572,8 @@ is_deeply(get_account($lim, $account_id), {
 	email => 'testmailtwo@limesco.nl',
 	password_hash => undef,
 	admin => 0,
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }, "No properties changed");
 
 # Make a change in latest record
@@ -565,6 +600,8 @@ is_deeply(get_account($lim, $account_id), {
 	email => 'testmailtwo@limesco.nl',
 	password_hash => undef,
 	admin => 0,
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }, "Street name changed");
 
 $exception = undef;
@@ -600,6 +637,8 @@ is_deeply(get_account($lim, $account_id, '2014-03-11'), {
 	email => 'testemail@limesco.nl',
 	password_hash => undef,
 	admin => '0',
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }, "Account still exists before deletion");
 
 undef $exception;
@@ -625,6 +664,7 @@ $account = create_account($lim, {
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => 0,
+	contribution => '2.00000000',
 }, '2014-06-01');
 
 update_account($lim, $account->{'id'}, {
@@ -760,6 +800,8 @@ is_deeply(get_account($lim, $account->{'id'}, '2014-06-06'), {
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => 0,
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 	period => '[2014-06-05,2014-06-07)',
 }, "Account is still OK before forced deletion");
 $exception = undef;
@@ -788,6 +830,7 @@ $account = create_account($lim, {
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => 0,
+	contribution => '2.00000000',
 }, '2014-07-01');
 
 undef $exception;
@@ -833,6 +876,7 @@ $account = create_account($lim, {
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => 0,
+	contribution => '2.00000000',
 }, '2014-08-01');
 # This creates a new record 2014-08-05:
 update_account($lim, $account->{'id'}, {
@@ -859,6 +903,8 @@ is_deeply([account_changes_between($lim, $account->{'id'}, '2014-08-01')], [
 	email => 'testemail@limesco.nl',
 	password_hash => "",
 	admin => 0,
+	contribution => '2.00000000',
+	last_contribution_month => undef,
 }, {
 	period => '[2014-08-05,)',
 	company_name => "Test Company Name 2",
