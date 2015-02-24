@@ -11,6 +11,7 @@ use DateTime;
 # The SIM changer is necessary for updating the last-invoiced information in a
 # SIM after generating an invoice for it
 do '../sim-change/sim-change.pl';
+do '../account-change/account-change.pl';
 
 =head1 invoice-generate.pl
 
