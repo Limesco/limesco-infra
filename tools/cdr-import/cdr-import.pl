@@ -10,6 +10,7 @@ use DateTime;
 use LWP::UserAgent;
 use HTTP::Cookies;
 use Text::CSV;
+use Data::Dumper;
 
 =head1 cdr-import.pl
 
@@ -460,8 +461,28 @@ sub update_cdrs_from_new_format_file {
 
 		my $service = $old_cdrs[0]{'service'};
 		if($service eq "DATA" || $service eq "SMS") {
+			# It occasionally happens that a data CDR is written to the CDR file twice.
+			# In this case, we discard all but the first.
+			if(@new_cdrs > 1 && $service eq "DATA") {
+				my $first_cdr = $new_cdrs[0];
+				my @equal_fields = qw(cid time to account usage source destination leg reason);
+				for my $cdr (@new_cdrs) {
+					for my $field (@equal_fields) {
+						if($cdr->{$field} ne $first_cdr->{$field}) {
+							warn "Mismatching data CDRs with the same CID:\n";
+							print Dumper(\@new_cdrs);
+							die "Invalid CDR list\n";
+						}
+					}
+				}
+				# apparantly, they were all equal, save just the first
+				@new_cdrs = ($first_cdr);
+			}
+
 			if(@new_cdrs > 1 || @old_cdrs > 1) {
-				die "Number of CDRs cannot be more than 1 for data or sms";
+				warn "Number of CDRs cannot be more than 1 for data or sms:\n";
+				print Dumper(\@new_cdrs, \@old_cdrs);
+				die "Invalid CDR list\n";
 			}
 
 			my $new_cdr = $new_cdrs[0];
