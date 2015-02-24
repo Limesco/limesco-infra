@@ -19,7 +19,7 @@ btree_gist module from the postgres-contrib repository. To give your normal
 development UNIX user access to the server switch to the UNIX user running
 PostgreSQL and run (substituting $USERNAME with your username):
 
-	$ createuser -d $USERNAME
+	$ createuser -ds $USERNAME
 
 Then, as $USERNAME, you can use createdb and dropdb to create and destroy a
 liminfra database as you see fit. To open a Postgres shell to the empty
