@@ -428,22 +428,26 @@ sub update_cdrs_from_new_format_file {
 		$body .= $_;
 	}
 	close $fh;
-	my @calls;
+	my %calls;
 	import_speakup_cdrs_from_csv($lim, sub {
 		my $su_cdr = $_[0];
 		my $cid = $su_cdr->{'cid'};
-		my $time = $su_cdr->{'time'};
 		my $account = $su_cdr->{'account'};
-		my $latest_cdr = $calls[$#calls][0] if(@calls > 0);
 
-		if($latest_cdr && $latest_cdr->{'cid'} eq $cid && $latest_cdr->{'time'} eq $time
-		&& $latest_cdr->{'account'} eq $account) {
-			push @{$calls[$#calls]}, $su_cdr;
-		} else {
-			push @calls, [$su_cdr];
-		}
+		$calls{$account} ||= {};
+		$calls{$account}{$cid} ||= [];
+		push @{$calls{$account}{$cid}}, $su_cdr;
 	}, $body);
 	undef $body;
+
+	my @calls;
+	for my $account_calls (values %calls) {
+		for my $calls (values %$account_calls) {
+			push @calls, $calls;
+		}
+	}
+	%calls = ();
+
 	my $call_sth = $dbh->prepare("SELECT * FROM cdr WHERE call_id=? AND time >= (?::timestamp - '30 seconds'::interval) AND time <= (?::timestamp + '30 seconds'::interval) AND speakup_account=? AND service=?");
 	my $updated_cdrs = 0;
 	foreach(@calls) {
