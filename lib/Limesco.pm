@@ -6,6 +6,7 @@ use Carp;
 use Config::Tiny;
 use DBI;
 use DBD::Pg;
+use Try::Tiny;
 
 our $VERSION = "0.01";
 
@@ -191,15 +192,65 @@ sub get_account_like {
 		}
 	}
 
-	if(@accounts == 1) {
-		return $self->get_account($accounts[0][0]);
-	} else {
-		my $error = "Multiple accounts match '$string'\n";
-		foreach(@accounts) {
-			$error .= sprintf("% 4d %15s  %s %s %s\n", $_->[0], $_->[2], $_->[3], $_->[4], $_->[5]);
-		}
-		die $error;
+	my %accounts;
+	for my $account (@accounts) {
+		try {
+			$accounts{$account->[0]} = $self->get_account($account->[0]);
+		} catch {
+			$accounts{$account->[0]} = undef;
+		};
 	}
+
+	if(keys %accounts == 1) {
+		return $self->get_account(keys %accounts);
+	}
+
+	my $error = "Multiple accounts match '$string'\n";
+	foreach my $account_id (sort { $a <=> $b } keys %accounts) {
+		my $account = $accounts{$account_id};
+		my ($lower, $upper) = $self->get_account_period($account_id);
+		$upper ||= "present";
+		my $period = "$lower - $upper";
+
+		if(!$account) {
+			# doesn't exist anymore, take last known data
+			my ($y, $m, $d) = $upper =~ /^(\d{4})-(\d\d)-(\d\d)$/;
+			my $dt = DateTime->new(year => $y, month => $m, day => $d);
+			$dt->subtract(days => 1);
+			$account = $self->get_account($account_id, $dt->ymd);
+		}
+
+		if($account->{'company_name'}) {
+			$error .= sprintf("% 4d %30s (%s)\n     %30s\n", $account->{'id'},
+				$account->{'first_name'} . " " . $account->{'last_name'},
+				$period, $account->{'company_name'});
+		} else {
+			$error .= sprintf("% 4d %30s (%s)\n", $account->{'id'},
+				$account->{'first_name'} . " " . $account->{'last_name'},
+				$period);
+		}
+	}
+	die $error;
+}
+
+sub get_account_period {
+	my ($self, $account_id) = @_;
+	my $dbh = $self->get_database_handle();
+
+	# Accounts must have a start date
+	my $sth = $dbh->prepare("SELECT min(lower(period)) FROM account WHERE id=?");
+	$sth->execute($account_id);
+	my $lower = $sth->fetchrow_arrayref();
+	if(!$lower) {
+		die "Account $account_id doesn't exist\n";
+	}
+	$lower = $lower->[0];
+
+	$sth = $dbh->prepare("SELECT upper(period) FROM account WHERE id=? ORDER BY 1 DESC LIMIT 1");
+	$sth->execute($account_id);
+	my $upper = $sth->fetchrow_arrayref()->[0];
+
+	return ($lower, $upper);
 }
 
 1;
