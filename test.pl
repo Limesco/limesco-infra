@@ -28,7 +28,7 @@ find(sub {
 		push @test_files, $name
 			unless grep {$_ eq $name} @test_files;
 	}
-}, $basepath."/tools");
+}, $basepath."/t", $basepath."/tools");
 
 # Run them
 my $harness = TAP::Harness->new({
