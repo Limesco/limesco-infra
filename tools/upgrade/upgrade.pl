@@ -117,7 +117,7 @@ Returns the latest schema version supported by this tool.
 =cut
 
 sub get_latest_schema_version {
-	return 10;
+	return 11;
 }
 
 =head3 update_schema_version($lim, $dbh, $version)
@@ -406,6 +406,7 @@ sub initialize_database {
 
 		add_directdebit_tables($lim, $dbh);
 		add_cdr_import_tables($lim, $dbh);
+		add_payment_tables($lim, $dbh);
 
 		return $dbh->commit();
 	} catch {
@@ -520,7 +521,13 @@ sub upgrade_database {
 			$current_version = 10;
 		}
 
-		if($current_version > 10) {
+		if($current_version == 10) {
+			add_payment_tables($lim, $dbh);
+			update_schema_version($lim, $dbh, 11);
+			$current_version = 11;
+		}
+
+		if($current_version > 11) {
 			die "Not implemented";
 		}
 
@@ -649,6 +656,35 @@ sub remove_portingstate_from_sim {
 
 	$dbh->do("ALTER TABLE sim DROP COLUMN porting_state;");
 	$dbh->do("DROP TYPE portingstate;");
+}
+
+=head3 add_payment_tables($lim, $dbh)
+
+Add the payment and bankaccountimports tables.
+
+=cut
+
+sub add_payment_tables {
+	my ($lim, $dbh) = @_;
+	$dbh->do("CREATE TABLE bankaccountimports (
+			startdate DATE NOT NULL PRIMARY KEY,
+			startbalance MONEY2 NOT NULL,
+			enddate DATE NOT NULL UNIQUE,
+			endbalance MONEY2 NOT NULL,
+			transactions INT NOT NULL,
+			payments INT NOT NULL,
+			CHECK(enddate > startdate)
+	)");
+	$dbh->do("CREATE TYPE paymenttype AS ENUM('BANK_TRANSFER', 'TARGETPAY', 'DIRECTDEBIT', 'BITKASSA', 'ADMINISTRATIVE');");
+	$dbh->do("CREATE TABLE payment (
+			id SERIAL PRIMARY KEY NOT NULL,
+			account_id INTEGER NOT NULL,
+			type PAYMENTTYPE NOT NULL,
+			amount MONEY2 NOT NULL,
+			date DATE NOT NULL,
+			origin SHORTTEXT NULL,
+			description LONGTEXT NULL
+	)");
 }
 
 1;

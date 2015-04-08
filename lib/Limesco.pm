@@ -7,6 +7,7 @@ use Config::Tiny;
 use DBI;
 use DBD::Pg;
 use Try::Tiny;
+use Encode;
 
 our $VERSION = "0.01";
 
