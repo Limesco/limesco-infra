@@ -885,7 +885,7 @@ sub run_set {
 	}
 
 	my @forbidden_variables = qw(id iccid period activation_invoice_id last_monthly_fees_invoice_id
-		last_monthly_fees_month);
+		last_monthly_fees_month last_contribution_month);
 	for(@forbidden_variables) {
 		if($_ eq $variable) {
 			warn "Variable cannot be changed using shell: $variable\n";
