@@ -24,9 +24,9 @@ do '../letter-generate/letter-generate.pl' unless UNIVERSAL::can('main', "genera
 =head1 invoice-export.pl
 
 Usage:
-1. invoice-export.pl [infra-options] --invoice <num> [--template <textemplate>] --write-to <filename>
-2. invoice-export.pl [infra-options] --invoice <num> [--template <textemplate>] --open
-3. invoice-export.pl [infra-options] --invoice <num> [--template <textemplate>] --email-template <txttemplate> { --email-owner | --email-to <address> }
+  1. invoice-export.pl [infra-options] --invoice <num> [--template <textemplate>] --write-to <filename>
+  2. invoice-export.pl [infra-options] --invoice <num> [--template <textemplate>] --open
+  3. invoice-export.pl [infra-options] --invoice <num> [--template <textemplate>] --email-template <txttemplate> { --email-owner | --email-to <address> }
 
 This tool can be used to export PDF or Tex templates for an invoice, using the
 file given using --template or 'invoice-template.tex' by default.
