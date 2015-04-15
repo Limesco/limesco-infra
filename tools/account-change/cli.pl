@@ -895,7 +895,7 @@ sub run_set {
 
 	my $object = $self->{'sim'} ? $self->{'sim'} : $self->{'account'};
 	if(!exists $object->{$variable}) {
-		warn "No such variable in SIM: $variable\n";
+		warn "No such variable: $variable\n";
 		return;
 	}
 
