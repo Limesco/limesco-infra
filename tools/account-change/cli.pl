@@ -34,6 +34,14 @@ sub today {
 	return sprintf("%04d-%02d-%02d", $time[5] + 1900, $time[4] + 1, $time[3]);
 }
 
+sub numeric_convert_if_numeric {
+	my ($value) = @_;
+	if($value =~ /^(\d+)[,\.](\d+)$/) {
+		return "$1.$2" + 0;
+	}
+	return $value;
+}
+
 # ask_question($question, sub ...) = ask question, feed answers through subroutine
 # subroutine can return undef to try again, the given value to accept it, or
 # another value that will be returned by ask_question()
@@ -278,7 +286,8 @@ sub cli_create_account {
 	$account->{'postal_code'} = ask_question("Postal code?");
 	$account->{'city'} = ask_question("City?");
 	$account->{'email'} = ask_question("E-mail address?");
-	$account->{'contribution'} = ask_question("Contribution amount?");
+	$account->{'contribution'} = numeric_convert_if_numeric(
+		ask_question("Contribution amount (ex VAT)?"));
 	return ::create_account($self->{'lim'}, $account, $starting_date);
 }
 
@@ -889,6 +898,8 @@ sub run_set {
 		warn "No such variable in SIM: $variable\n";
 		return;
 	}
+
+	$value = numeric_convert_if_numeric($value);
 
 	$self->{queued_changes} ||= {};
 	$self->{queued_changes}{$variable} = $value;
