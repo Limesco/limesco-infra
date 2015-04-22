@@ -39,12 +39,13 @@ if(!caller) {
 			my $amount;
 			if($_->{'objecttype'} eq "PAYMENT") {
 				$amount = $_->{'amount'};
-				$descr = lc($_->{'type'}) . $_->{'origin'};
+				$descr = lc($_->{'type'}) . " " . $_->{'origin'};
 			} else {
 				$amount = -$_->{'rounded_with_taxes'};
 				$descr = $_->{'id'};
 			}
-			printf("%s %30s  %.2f -> %.2f\n", lc($_->{'objecttype'}), $descr, $amount, $_->{'balance'});
+			printf("%s %s %40s  %s -> %s\n", lc($_->{'objecttype'}), $_->{'date'}, $descr,
+				sprintf_money($amount), sprintf_money($_->{'balance'}));
 		}
 	} else {
 		my $dbh = $lim->get_database_handle();
@@ -65,12 +66,21 @@ if(!caller) {
 			if($account->{'company_name'}) {
 				$name = $account->{'company_name'} . " ($name)";
 			}
-			printf("%3d %45s -> %.2f\n", $account->{'id'}, $name, $balance);
+			printf("%3d %45s -> %s\n", $account->{'id'}, $name, sprintf_money($balance));
 		}
 	}
 }
 
 =head2 Methods
+
+=head3 sprintf_money($amount)
+
+=cut
+
+sub sprintf_money {
+	my ($amount) = @_;
+	return sprintf("%6s", sprintf("%.2f", $amount));
+}
 
 =head3 list_payments($lim, [$account_id])
 
