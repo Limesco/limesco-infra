@@ -145,38 +145,9 @@ sub import_mt940_file {
 				if($direction eq 'D') {
 					$amount = -$amount;
 				}
-				my @invoices = $description =~ /\b(\d\dC\d{6})\b/;
-				if(!@invoices) {
-					next;
-				}
-				my $account_id;
-				foreach(@invoices) {
-					my $account_from_invoice = $dbh->prepare("SELECT account_id FROM invoice WHERE id=?");
-					$account_from_invoice->execute($_);
-					my $this_account_id = $account_from_invoice->fetchrow_hashref();
-					if(!$this_account_id) {
-						warn "Invoice ID $_ referenced but not found, ignoring\n";
-						next;
-					}
-					$this_account_id = $this_account_id->{'account_id'};
-					if(defined($account_id) && $this_account_id != $account_id) {
-						warn "Transaction pays for multiple accounts; that's unsupported, ignoring it\n";
-						undef $account_id;
-						last;
-					}
-					$account_id = $this_account_id;
-				}
-				if($account_id) {
-					$payments++;
-					create_payment($dbh, {
-						account_id => $account_id,
-						type => 'BANK_TRANSFER',
-						amount => $amount,
-						date => new DateTime(year => "20$year", month => $month, day => $day)->ymd,
-						origin => $peer,
-						description => $description,
-					});
-				}
+				$payments += evaluate_transaction($lim, $dbh,
+					new DateTime(year => "20$year", month => $month, day => $day),
+					$peer, $description, $amount);
 			}
 
 			if(!defined($first_date)) {
@@ -200,6 +171,115 @@ sub import_mt940_file {
 		$dbh->rollback;
 		die $exception;
 	};
+}
+
+=head2 evaluate_transaction($lim, $peer, $description, $amount)
+
+Evaluate this transaction. Returns the number of payments added for it.
+
+=cut
+
+sub evaluate_transaction {
+	my ($lim, $dbh, $date, $peer, $description, $amount) = @_;
+	my $single_line_description = $description;
+	$single_line_description =~ s/[\n\r]//g;
+	my @invoices = $single_line_description =~ /(\d\dC\d{6})/i;
+	if(@invoices) {
+		# Explicit invoice ID(s), so handle them
+		my $account_id;
+		foreach(@invoices) {
+			my $account_from_invoice = $dbh->prepare("SELECT account_id FROM invoice WHERE id=?");
+			$account_from_invoice->execute($_);
+			my $this_account_id = $account_from_invoice->fetchrow_hashref();
+			if(!$this_account_id) {
+				warn "Invoice ID $_ referenced but not found, ignoring\n";
+				next;
+			}
+			$this_account_id = $this_account_id->{'account_id'};
+			if(defined($account_id) && $this_account_id != $account_id) {
+				warn "Transaction pays for multiple accounts; that's unsupported, ignoring it\n";
+				undef $account_id;
+				last;
+			}
+			$account_id = $this_account_id;
+		}
+		if($account_id) {
+			create_payment($dbh, {
+				account_id => $account_id,
+				type => 'BANK_TRANSFER',
+				amount => $amount,
+				date => $date->ymd,
+				origin => $peer,
+				description => $description,
+			});
+			return 1;
+		}
+	}
+
+	# TODO: directdebit
+	# TODO: targetpay
+
+	# Does this transaction come from a single known bank account?
+	my $sth = $dbh->prepare("SELECT DISTINCT account_id FROM payment WHERE type='BANK_TRANSFER' AND origin=?");
+	$sth->execute($peer);
+	my $account_id = $sth->fetchrow_hashref;
+	if($account_id && $sth->fetchrow_hashref) {
+		warn "Ignoring transaction at " . $date->ymd . " of $amount from $peer; it had no invoice number and could be linked to multiple account ID's:\n$description\n";
+		return 0;
+	} elsif($account_id) {
+		$account_id = $account_id->{'account_id'};
+		my $account_sth = $dbh->prepare("SELECT first_name, last_name, company_name FROM account WHERE id=?");
+		$account_sth->execute($account_id);
+		my $account = $account_sth->fetchrow_hashref;
+		if($account) {
+			warn "Transaction at " . $date->ymd . " of $amount from $peer can be linked using bank account:\n";
+			warn "  Account: " . $account->{'first_name'} . " " . $account->{'last_name'} . " (" . $account->{'company_name'} . ")\n";
+			warn "  Description: " . $description . "\n";
+			$|++;
+			print STDERR "OK to process like this? [Yn] ";
+			my $ok = <STDIN>;
+			1 while chomp $ok;
+			if($ok =~ /^(y.+|$)/g) {
+				create_payment($dbh, {
+					account_id => $account_id,
+					type => 'BANK_TRANSFER',
+					amount => $amount,
+					date => $date->ymd,
+					origin => $peer,
+					description => $description,
+				});
+				warn "OK, payment created.\n\n";
+				return 1;
+			} else {
+				warn "OK, skipped.\n\n";
+			}
+		} else {
+			warn "Transaction at " . $date->ymd . " of $amount from $peer was known bank account but account ID $account_id did not exist at that date.\n";
+			warn "  Description: " . $description . "\n";
+			return 0;
+		}
+	} elsif($amount > 0) {
+		$peer ||= "unknown bank account";
+		warn "Incoming transaction at " . $date->ymd . " of $amount from $peer had no invoice number and unknown bank account, so could not be linked.\n";
+		warn "  Description: " . $description . "\n";
+		print STDERR "Enter account ID or leave empty to skip: ";
+		my $account_id = <STDIN>;
+		1 while chomp $account_id;
+		if($account_id) {
+			create_payment($dbh, {
+				account_id => $account_id,
+				type => 'BANK_TRANSFER',
+				amount => $amount,
+				date => $date->ymd,
+				origin => $peer,
+				description => $description,
+			});
+			warn "OK, payment created.\n\n";
+			return 1;
+		}
+		warn "\n";
+	}
+	return 0;
 }
 
 =head3 create_payment($lim / $dbh, $payment)
