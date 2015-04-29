@@ -177,7 +177,7 @@ sub list_invoices {
 	return @invoices;
 }
 
-=head3 get_invoice($lim, $invoice_id)
+=head3 get_invoice($lim | $dbh, $invoice_id)
 
 Retrieve information about invoice $invoice_id.
 
@@ -185,7 +185,8 @@ Retrieve information about invoice $invoice_id.
 
 sub get_invoice {
 	my ($lim, $invoice_id) = @_;
-	my $dbh = $lim->get_database_handle();
+	my $dbh_is_mine = ref($lim) eq "Limesco";
+	my $dbh = $dbh_is_mine ? $lim->get_database_handle() : $lim;
 	my $sth = $dbh->prepare("SELECT * FROM invoice WHERE id=?");
 	$sth->execute($invoice_id);
 	my $invoice = $sth->fetchrow_hashref() or die "Invoice doesn't exist: '$invoice_id'\n";

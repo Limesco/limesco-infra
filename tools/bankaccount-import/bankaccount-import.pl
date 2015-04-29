@@ -11,6 +11,9 @@ use DateTime;
 use Term::Menu;
 use Data::Dumper;
 
+do '../directdebit/directdebit.pl' or die $!;
+do '../invoice-export/invoice-export.pl' or die $!;
+
 =head1 bankaccount-import.pl
 
 Usage:
@@ -216,7 +219,49 @@ sub evaluate_transaction {
 		}
 	}
 
-	# TODO: directdebit
+	if($description =~ /^\/PREF\/(LDD-20\d\d-\d\d-\d\d-(?:FRST|RCUR))$/) {
+		my $directdebit_id = $1;
+		my $file = ::get_directdebit_file($dbh, $directdebit_id);
+		my $num_payments = 0;
+		foreach my $transaction (@{$file->{'transactions'}}) {
+			my $invoice_id = $transaction->{'invoice_id'};
+			my $status = $transaction->{'status'};
+			if($status ne "NEW" && $status ne "SUCCESS") {
+				warn "Ignoring directdebit transaction whose status is $status.\n";
+				next;
+			}
+			# XXX HACK, 'amount' should be added to directdebit transaction table
+			my $sth = $dbh->prepare("SELECT item_count, item_price FROM invoice_itemline WHERE invoice_id=? AND item_price > 30 AND description LIKE 'Activatie SIM-kaart'");
+			$sth->execute($invoice_id);
+			my $number_of_activations = 0;
+			while(my $line = $sth->fetchrow_arrayref()) {
+				if($line->[0] != 1 || $line->[1] != 34.7107) {
+					die "Activation price or count is off on invoice $invoice_id";
+				}
+				$number_of_activations += $line->[0];
+			}
+			my $subtract = $number_of_activations * 42;
+			$sth = $dbh->prepare("SELECT account_id, rounded_with_taxes FROM invoice WHERE id=?");
+			$sth->execute($invoice_id);
+			my $invoice = $sth->fetchrow_hashref();
+			my $invoice_price = $invoice->{'rounded_with_taxes'} - $subtract;
+
+			if($invoice_price > 0) {
+				$num_payments++;
+				create_payment($dbh, {
+					account_id => $invoice->{'account_id'},
+					type => 'DIRECTDEBIT',
+					amount => $invoice_price,
+					date => $date->ymd,
+					origin => $directdebit_id,
+					description => $directdebit_id,
+				});
+			}
+		}
+		::mark_directdebit_file($dbh, $file->{'id'}, "SUCCESS");
+		return $num_payments;
+	}
+
 	# TODO: targetpay
 
 	# Does this transaction come from a single known bank account?
