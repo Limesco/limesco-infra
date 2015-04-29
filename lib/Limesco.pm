@@ -120,7 +120,19 @@ sub speakup_config {
 	if(!$c->{'uri_base'} || !$c->{'username'} || !$c->{'password'}) {
 		die "Missing speakup configuration parameters in config file\n";
 	}
-	return $self->{'config'}{'speakup'};
+	return $c;
+}
+
+sub targetpay_config {
+	my ($self) = @_;
+	my $c = $self->{'config'}{'targetpay'};
+	if(!$c) {
+		die "Targetpay configuration block missing in config file\n";
+	}
+	if(!$c->{'uri_base'} || !$c->{'username'} || !$c->{'password'}) {
+		die "Missing targetpay configuration parameters in config file\n";
+	}
+	return $c;
 }
 
 sub get_database_handle {

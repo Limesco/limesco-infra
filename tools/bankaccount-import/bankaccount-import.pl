@@ -10,6 +10,12 @@ use Try::Tiny;
 use DateTime;
 use Term::Menu;
 use Data::Dumper;
+use LWP::UserAgent;
+use HTML::DOM;
+use HTTP::Cookies;
+use CAM::PDF;
+use CAM::PDF::PageText;
+use Text::CSV;
 
 do '../directdebit/directdebit.pl' or die $!;
 do '../invoice-export/invoice-export.pl' or die $!;
@@ -262,7 +268,36 @@ sub evaluate_transaction {
 		return $num_payments;
 	}
 
-	# TODO: targetpay
+	if($single_line_description =~ /\/\/NAME\/[a-zA-Z ]+ TargetMedia\/.+klantnr 76992 (\d+)\s*\//i) {
+		print "Asking for TargetPay transactions with ID $1\n";
+		my %transactions = targetpay_get_transactions($lim, $1);
+		my $num_payments = 0;
+		foreach my $payment (values %transactions) {
+			my $ymd = substr($payment->{'DateTime'}, 0, 10);
+			my $amount = $payment->{'Amount'};
+			$amount =~ s/,/./g;
+			warn "TargetPay transaction at " . $payment->{'DateTime'} . " of $amount must be hand-linked.\n";
+			warn "  Name: " . $payment->{'Name'} . "\n";
+			warn "  Description: " . $payment->{'Description'} . "\n";
+			warn "  Origin bank account: " . $payment->{'Account'} . "\n";
+			print STDERR "Enter account ID or leave empty to skip: ";
+			my $account_id = <STDIN>;
+			1 while chomp $account_id;
+			if($account_id) {
+				$num_payments++;
+				create_payment($dbh, {
+					account_id => $account_id,
+					type => 'TARGETPAY',
+					amount => $amount,
+					date => $ymd,
+					origin => $payment->{'Account'},
+					description => $payment->{'Description'},
+				});
+				warn "OK, payment created.\n\n";
+			}
+		}
+		return $num_payments;
+	}
 
 	# Does this transaction come from a single known bank account?
 	my $sth = $dbh->prepare("SELECT DISTINCT account_id FROM payment WHERE type='BANK_TRANSFER' AND origin=?");
@@ -402,6 +437,117 @@ sub create_payment_interactively {
 	if($menu->question("Are you sure? [yN] ") =~ /^y$/i) {
 		create_payment($lim, $payment);
 	}
+}
+
+=head3 targetpay_get_transactions($lim, $invoiceid)
+
+Retrieve a TargetPay transaction list for the given TargetMedia invoice ID.
+
+=cut
+
+sub targetpay_get_transactions {
+	my ($lim, $invoiceid) = @_;
+	my $config = $lim->targetpay_config();
+
+	my $cookie_jar = HTTP::Cookies->new;
+	my $ua = LWP::UserAgent->new;
+	$ua->timeout(10);
+	$ua->agent("Liminfra/0.0 ");
+	$ua->cookie_jar($cookie_jar);
+
+	# Step 1: log in
+	my $response = $ua->post($config->{'uri_base'} . '/login', {
+		returnurl => "/today",
+		submit => "+Inloggen+",
+		login_username => $config->{'username'},
+		login_password => $config->{'password'},
+	});
+
+	if($response->code != 302) {
+		die "TargetPay login token request failed: " . $response->status_line;
+	}
+
+	# Step 2: retrieve PDF download link for this invoice ID
+	$response = $ua->get($config->{'uri_base'} . '/invoices');
+	my $dom_tree = new HTML::DOM;
+	$dom_tree->write($response->decoded_content);
+	$dom_tree->close();
+	my ($a_link, $date);
+	foreach my $rows ($dom_tree->getElementsByTagName('tr')) {
+		my @childs = $rows->childNodes;
+		if(@childs == 7 && $childs[0]->as_text eq $invoiceid && $childs[2]->as_text eq "EUR") {
+			$a_link = $childs[0]->firstChild->getAttribute("href");
+			$date = $childs[4]->as_text;
+		}
+	}
+	if(!$a_link || !$date) {
+		die "Did not find invoice $invoiceid on Targetpay invoices page\n";
+	}
+
+	# Step 3: retrieve PDF and find payment IDs for this invoice
+	$response = $ua->get($config->{'uri_base'} . $a_link);
+	if($response->code != 200) {
+		die "TargetPay invoice PDF request failed: " . $response->status_line;
+	}
+	my $pdf = CAM::PDF->new($response->decoded_content);
+	my $text = CAM::PDF::PageText->render($pdf->getPageContentTree(1));
+	my @words = split /\s+/, $text;
+	my $counting = 0;
+	my @paymentids;
+	foreach(@words) {
+		if($counting && /^(\d+),?$/) {
+			push @paymentids, $1;
+		} elsif($counting) {
+			last;
+		} elsif($_ eq "Betalingskenmerken:") {
+			$counting = 1;
+		}
+	}
+
+	# Step 4: retrieve information on all payments
+	my ($day, $month, $year) = $date =~ /^(\d\d)-(\d\d)-(\d{4})$/;
+	if(!$year) {
+		die "Failed to parse TargetPay date: $date\n";
+	}
+	$date = DateTime->new(year => $year, month => $month, day => $day);
+	my %payments;
+	my $start = $date->clone->subtract(months => 1);
+	my $end = $date->clone->add(months => 1);
+	foreach(@paymentids) {
+		my %parameters = (
+			sent => 1,
+			report => 52,
+			prevreport => 52,
+			salesid => $_,
+			p1d => $start->day,
+			p1m => $start->month,
+			p1y => $start->year,
+			p2d => $end->day,
+			p2m => $end->month,
+			p2y => $end->year,
+			csv => 1,
+		);
+		my $url = '/orderdetails?';
+		foreach(keys %parameters) {
+			$url .= $_ . '=' . $parameters{$_} . '&';
+		}
+		$response = $ua->get($config->{'uri_base'} . $url);
+		if($response->code != 200) {
+			die "TargetPay invoice information request failed: " . $response->status_line;
+		}
+		if(!$response->decoded_content) {
+			die "TargetPay invoice information request returned empty response; URI = " . $config->{'uri_base'} . $url . "\n";
+		}
+		$response = $response->decoded_content;
+		open my $csvh, '<', \$response;
+		my $csv = Text::CSV->new({
+			sep_char => ';',
+		});
+		$csv->column_names($csv->getline($csvh));
+		$payments{$_} = $csv->getline_hr($csvh);
+	}
+
+	return %payments;
 }
 
 1;
