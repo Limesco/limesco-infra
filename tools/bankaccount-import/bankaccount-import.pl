@@ -198,7 +198,7 @@ sub evaluate_transaction {
 		my $account_id;
 		foreach(@invoices) {
 			my $account_from_invoice = $dbh->prepare("SELECT account_id FROM invoice WHERE id=?");
-			$account_from_invoice->execute($_);
+			$account_from_invoice->execute(uc($_));
 			my $this_account_id = $account_from_invoice->fetchrow_hashref();
 			if(!$this_account_id) {
 				warn "Invoice ID $_ referenced but not found, ignoring\n";
