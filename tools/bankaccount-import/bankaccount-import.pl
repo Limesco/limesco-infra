@@ -16,6 +16,7 @@ use HTTP::Cookies;
 use CAM::PDF;
 use CAM::PDF::PageText;
 use Text::CSV;
+use JSON;
 
 do '../directdebit/directdebit.pl' or die $!;
 do '../invoice-export/invoice-export.pl' or die $!;
@@ -24,6 +25,7 @@ do '../invoice-export/invoice-export.pl' or die $!;
 
 Usage:
   bankaccount-import.pl [infra-options] --mt940 filename
+  bankaccount-import.pl [infra-options] --json filename
   bankaccount-import.pl [infra-options] --create-payment
 
 If --mt940 is given, import bank account transactions from an mt940 file. All
@@ -39,6 +41,7 @@ using --create-payment.
 
 if(!caller) {
 	my $mt940;
+	my $json;
 	my $create;
 	my $lim = Limesco->new_from_args(\@ARGV, sub {
 		my ($args, $iref) = @_;
@@ -47,6 +50,8 @@ if(!caller) {
 			$mt940 = $args->[++$$iref];
 		} elsif($arg eq "--create-payment") {
 			$create = 1;
+		} elsif($arg eq "--json") {
+			$json = $args->[++$$iref];
 		} else {
 			return 0;
 		}
@@ -56,6 +61,8 @@ if(!caller) {
 		create_payment_interactively($lim);
 	} elsif($mt940) {
 		import_mt940_file($lim, $mt940);
+	} elsif($json) {
+		import_json_file($lim, $json);
 	} else {
 		die "Use --help to get usage information.\n";
 	}
@@ -74,6 +81,38 @@ sub parse_mt940_balance {
 	$balance += 0; # convert to number
 	my $date = DateTime->new(year => "20$year", month => $month, day => $day);
 	return ($date, $balance);
+}
+
+=head3 import_json_file($lim, $filename)
+
+Import a JSON file to the Payments table. The JSON file must consist of an object
+with a 'payments' key, which contains a list of payments. Each payment must have
+'account_id', 'type', 'amount', 'date' (YYYY-MM-DD), 'origin' and 'description' keys.
+
+=cut
+
+sub import_json_file {
+	my ($lim, $filename) = @_;
+	open my $fh, '<', $filename or die $!;
+	my $json_text;
+	while(<$fh>) {
+		$json_text .= $_;
+	}
+	close $fh;
+	my $json = decode_json($json_text);
+	my $dbh = $lim->get_database_handle;
+	$dbh->begin_work;
+
+	try {
+		foreach my $payment (@{$json->{'payments'}}) {
+			create_payment($dbh, $payment);
+		}
+		$dbh->commit;
+	} catch {
+		my $exception = $_ || "Unknown error";
+		$dbh->rollback;
+		die $exception;
+	};
 }
 
 =head3 import_mt940_file($lim, $filename)
