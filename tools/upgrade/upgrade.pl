@@ -675,7 +675,7 @@ sub add_payment_tables {
 			payments INT NOT NULL,
 			CHECK(enddate > startdate)
 	)");
-	$dbh->do("CREATE TYPE paymenttype AS ENUM('BANK_TRANSFER', 'TARGETPAY', 'DIRECTDEBIT', 'BITKASSA', 'ADMINISTRATIVE');");
+	$dbh->do("CREATE TYPE paymenttype AS ENUM('BANK_TRANSFER', 'TARGETPAY', 'DIRECTDEBIT', 'COINQY', 'BITKASSA', 'ADMINISTRATIVE');");
 	$dbh->do("CREATE TABLE payment (
 			id SERIAL PRIMARY KEY NOT NULL,
 			account_id INTEGER NOT NULL,

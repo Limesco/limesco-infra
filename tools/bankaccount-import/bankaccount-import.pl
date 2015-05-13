@@ -407,8 +407,9 @@ sub create_payment_interactively {
 			BANK_TRANSACTION => ["Bank transaction", 1],
 			TARGETPAY => ["TargetPay (iDeal)", 2],
 			DIRECTDEBIT => ["DirectDebit", 3],
-			BITKASSA => ["BitKassa (Bitcoin)", 4],
-			ADMINISTRATIVE => ["Administrative (other)", 5],
+			COINQY => ["Coinqy (Bitcoin)", 4],
+			BITKASSA => ["BitKassa (Bitcoin)", 5],
+			ADMINISTRATIVE => ["Administrative (other)", 6],
 		);
 	}
 
