@@ -231,7 +231,7 @@ sub evaluate_transaction {
 	my ($lim, $dbh, $date, $peer, $description, $amount) = @_;
 	my $single_line_description = $description;
 	$single_line_description =~ s/[\n\r]//g;
-	my @invoices = $single_line_description =~ /(\d\dC\d{6})/i;
+	my @invoices = $single_line_description =~ /(\d\dC\d{6})\D/i;
 	if(@invoices) {
 		# Explicit invoice ID(s), so handle them
 		my $account_id;
