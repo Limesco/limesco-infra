@@ -551,7 +551,7 @@ sub targetpay_get_transactions {
 	my $counting = 0;
 	my @paymentids;
 	foreach(@words) {
-		if($counting && /^(\d+),?$/) {
+		if($counting && /^(\d+)(?:\(.*\))?,?$/) {
 			push @paymentids, $1;
 		} elsif($counting) {
 			last;
