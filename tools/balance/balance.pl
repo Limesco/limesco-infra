@@ -12,20 +12,24 @@ do '../invoice-export/invoice-export.pl' or die $!;
 
 =head1 balance.pl
 
-Usage: balance.pl [infra-options] [--account account-like]
+Usage: balance.pl [infra-options] [--account account-like] [--date date]
 
 Display payments, invoices and balance for a given account, or all accounts if
-none was given.
+none was given. If a date is given, payments and invoices until that date are
+shown, producing a balance on that date.
 
 =cut
 
 if(!caller) {
 	my $account;
+	my $date;
 	my $lim = Limesco->new_from_args(\@ARGV, sub {
 		my ($args, $iref) = @_;
 		my $arg = $args->[$$iref];
 		if($arg eq "--account") {
 			$account = $args->[++$$iref];
+		} elsif($arg eq "--date") {
+			$date = $args->[++$$iref];
 		} else {
 			return 0;
 		}
@@ -33,7 +37,7 @@ if(!caller) {
 
 	if($account) {
 		$account = $lim->get_account_like($account);
-		my @p_and_i = get_payments_and_invoices($lim, $account->{'id'});
+		my @p_and_i = get_payments_and_invoices($lim, $account->{'id'}, $date);
 		foreach(@p_and_i) {
 			my $descr;
 			my $amount;
@@ -60,7 +64,7 @@ if(!caller) {
 			push @accounts, $asth->fetchrow_hashref;
 		}
 		for my $account (@accounts) {
-			my @p_and_i = get_payments_and_invoices($lim, $account->{'id'});
+			my @p_and_i = get_payments_and_invoices($lim, $account->{'id'}, $date);
 			my $balance = @p_and_i ? (pop @p_and_i)->{'balance'} : 0;
 			my $name = sprintf("%s %s", $account->{'first_name'}, $account->{'last_name'});
 			if($account->{'company_name'}) {
@@ -117,16 +121,18 @@ sub get_payment {
 	return $payment;
 }
 
-=head3 get_payments_and_invoices($lim, $account_id)
+=head3 get_payments_and_invoices($lim, $account_id, [$date])
 
 Get a list of invoices and payments for an account ID, sorted by date. For each
 object, a field 'objecttype' is added whose value is PAYMENT or INVOICE, and a field
-'balance' is added which displays the cumulative balance after this object.
+'balance' is added which displays the cumulative balance after this object. If the
+optional date variable is given (YYYY-MM-DD), only objects until the given date
+are returned.
 
 =cut
 
 sub get_payments_and_invoices {
-	my ($lim, $account_id) = @_;
+	my ($lim, $account_id, $date) = @_;
 	my @payments = list_payments($lim, $account_id);
 	foreach(@payments) {
 		$_->{'objecttype'} = "PAYMENT";
@@ -135,7 +141,8 @@ sub get_payments_and_invoices {
 	foreach(@invoices) {
 		$_->{'objecttype'} = "INVOICE";
 	}
-	my @payments_and_invoices = sort { $a->{'date'} cmp $b->{'date'} } (@payments, @invoices);
+	my @payments_and_invoices = sort { $a->{'date'} cmp $b->{'date'} }
+		grep { !$date || $date ge $_->{'date'} } (@payments, @invoices);
 	my $balance = 0;
 	foreach(@payments_and_invoices) {
 		$balance += $_->{'objecttype'} eq "PAYMENT" ? $_->{'amount'} : -$_->{'rounded_with_taxes'};
