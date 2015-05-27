@@ -348,12 +348,15 @@ sub evaluate_transaction {
 		return $num_payments;
 	}
 
-	# Does this transaction come from a single known bank account?
+	# Is this an incoming transaction from a single known bank account?
 	my $sth = $dbh->prepare("SELECT DISTINCT account_id FROM payment WHERE type='BANK_TRANSFER' AND origin=?");
 	$sth->execute($peer);
 	my $account_id = $sth->fetchrow_hashref;
 	if($account_id && $sth->fetchrow_hashref) {
 		warn "Ignoring transaction at " . $date->ymd . " of $amount from $peer; it had no invoice number and could be linked to multiple account ID's:\n$description\n";
+		return 0;
+	} elsif($account_id && $amount < 0) {
+		warn "Ignoring transaction at " . $date->ymd . " of $amount from $peer: it had no invoice number and is outgoing, and I won't automatically link outgoing transactions:\n$description\n";
 		return 0;
 	} elsif($account_id) {
 		$account_id = $account_id->{'account_id'};
