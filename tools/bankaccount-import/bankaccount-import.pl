@@ -264,7 +264,7 @@ sub evaluate_transaction {
 		}
 	}
 
-	if($description =~ /^\/PREF\/(LDD-20\d\d-\d\d-\d\d-(?:FRST|RCUR))$/) {
+	if($description =~ /^\/PREF\/(LDD-20\d\d-\d\d-\d\d-(?:FRST|RCUR)\d*)$/) {
 		my $directdebit_id = $1;
 		my $file = ::get_directdebit_file($dbh, $directdebit_id);
 		my $num_payments = 0;
