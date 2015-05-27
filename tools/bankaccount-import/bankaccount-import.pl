@@ -270,11 +270,6 @@ sub evaluate_transaction {
 		my $num_payments = 0;
 		foreach my $transaction (@{$file->{'transactions'}}) {
 			my $invoice_id = $transaction->{'invoice_id'};
-			my $status = $transaction->{'status'};
-			if($status ne "NEW" && $status ne "SUCCESS") {
-				warn "Ignoring directdebit transaction whose status is $status.\n";
-				next;
-			}
 			# XXX HACK, 'amount' should be added to directdebit transaction table
 			my $sth = $dbh->prepare("SELECT item_count, item_price FROM invoice_itemline WHERE invoice_id=? AND item_price > 30 AND description LIKE 'Activatie SIM-kaart'");
 			$sth->execute($invoice_id);
