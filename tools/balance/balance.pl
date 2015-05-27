@@ -36,7 +36,11 @@ if(!caller) {
 	});
 
 	if($account) {
-		$account = $lim->get_account_like($account);
+		if($account =~ /^\d+$/) {
+			$account = $lim->get_account($account);
+		} else {
+			$account = $lim->get_account_like($account);
+		}
 		my @p_and_i = get_payments_and_invoices($lim, $account->{'id'}, $date);
 		foreach(@p_and_i) {
 			my $descr;
