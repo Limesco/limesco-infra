@@ -317,7 +317,7 @@ sub evaluate_transaction {
 		return $num_payments;
 	}
 
-	if($single_line_description =~ /\/\/NAME\/[a-zA-Z ]+ TargetMedia\/.+klantnr 76992 (\d+)\s*\//i) {
+	if($single_line_description =~ /\/\/NAME\/[a-zA-Z ]+ (?:Derdengelden T|TargetMedia)\/.+klantnr 76992 (\d+)\s*\//i) {
 		print "Asking for TargetPay transactions with ID $1\n";
 		my %transactions = targetpay_get_transactions($lim, $1);
 		my $num_payments = 0;
