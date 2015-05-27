@@ -459,7 +459,7 @@ sub create_payment_interactively {
 
 	until($payment->{'type'}) {
 		$payment->{'type'} = $menu->menu(
-			BANK_TRANSACTION => ["Bank transaction", 1],
+			BANK_TRANSFER => ["Bank transaction", 1],
 			TARGETPAY => ["TargetPay (iDeal)", 2],
 			DIRECTDEBIT => ["DirectDebit", 3],
 			COINQY => ["Coinqy (Bitcoin)", 4],
