@@ -127,7 +127,7 @@ if(!caller) {
 	if($export) {
 		my $file;
 		if($export =~ /^LDD/) {
-			$file = get_directdebit_file_by_message_id($lim, $export);
+			$file = get_directdebit_file($lim, $export);
 		} else {
 			$file = get_directdebit_file($lim, $export);
 		}
@@ -453,7 +453,7 @@ sub create_directdebit_file {
 	};
 }
 
-=head3 mark_directdebit_file($lim, $file_id, $status)
+=head3 mark_directdebit_file($lim | $dbh, $file_id, $status)
 
 Change the status of a given directdebit file, i.e. mark it SUCCESS, or
 PRESETTLEMENTREJECT. Marking a whole file POSTSETTLEMENTREJECT is impossible.
@@ -471,6 +471,9 @@ semantics as a pre-settlement reject for all transactions. However, if a file
 succeeded, it is possible that some of the transactions in it have been
 rejected (a partial success).
 
+If a $lim object is given, a new transaction will be started. Otherwise, it is
+assumed that the given handle already has a running transaction.
+
 =cut
 
 sub mark_directdebit_file {
@@ -480,9 +483,12 @@ sub mark_directdebit_file {
 		die "Status in mark_directdebit_file must be SUCCESS or PRESETTLEMENTREJECT";
 	}
 
-	my $dbh = $lim->get_database_handle();
-	$dbh->begin_work;
-	$dbh->do("LOCK TABLE directdebit_transaction;");
+	my $dbh_is_mine = ref($lim) eq "Limesco";
+	my $dbh = $dbh_is_mine ? $lim->get_database_handle() : $lim;
+	if($dbh_is_mine) {
+		$dbh->begin_work;
+		$dbh->do("LOCK TABLE directdebit_transaction;");
+	}
 
 	if($status eq "PRESETTLEMENTREJECT") {
 		my $sth = $dbh->prepare("SELECT COUNT(id) FROM directdebit_transaction WHERE directdebit_file_id=? AND status <> 'NEW'");
@@ -495,10 +501,10 @@ sub mark_directdebit_file {
 
 	my $sth = $dbh->prepare("UPDATE directdebit_transaction SET status=? WHERE directdebit_file_id=? AND status='NEW'");
 	$sth->execute($status, $file_id);
-	$dbh->commit;
+	$dbh->commit if $dbh_is_mine;
 }
 
-=head3 get_directdebit_file($lim, $id)
+=head3 get_directdebit_file($lim | $dbh, $id)
 
 Retrieve directdebit file information from the database.
 
@@ -506,14 +512,26 @@ Retrieve directdebit file information from the database.
 
 sub get_directdebit_file {
 	my ($lim, $id) = @_;
-	my $dbh = $lim->get_database_handle();
+	my $dbh_is_mine = ref($lim) eq "Limesco";
+	my $dbh = $dbh_is_mine ? $lim->get_database_handle() : $lim;
 
-	my $sth = $dbh->prepare("SELECT * FROM directdebit_file WHERE id=?");
+	my $field = $id =~ /^LDD/ ? 'message_id' : 'id';
+
+	my $sth = $dbh->prepare("SELECT * FROM directdebit_file WHERE $field=?");
 	$sth->execute($id);
 	my $file = $sth->fetchrow_hashref;
 	if(!$file) {
 		die "No such DirectDebit file $id";
 	}
+
+	$file->{'transactions'} ||= [];
+
+	$sth = $dbh->prepare("SELECT * FROM directdebit_transaction WHERE directdebit_file_id=?");
+	$sth->execute($file->{'id'});
+	while(my $transaction = $sth->fetchrow_hashref) {
+		push @{$file->{'transactions'}}, $transaction;
+	}
+
 	return $file;
 }
 
