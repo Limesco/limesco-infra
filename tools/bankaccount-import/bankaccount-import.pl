@@ -268,6 +268,7 @@ sub evaluate_transaction {
 		my $directdebit_id = $1;
 		my $file = ::get_directdebit_file($dbh, $directdebit_id);
 		my $num_payments = 0;
+		my $sum_price = 0;
 		foreach my $transaction (@{$file->{'transactions'}}) {
 			my $invoice_id = $transaction->{'invoice_id'};
 			# XXX HACK, 'amount' should be added to directdebit transaction table
@@ -287,6 +288,7 @@ sub evaluate_transaction {
 			my $invoice_price = $invoice->{'rounded_with_taxes'} - $subtract;
 
 			if($invoice_price > 0) {
+				$sum_price += $invoice_price;
 				$num_payments++;
 				create_payment($dbh, {
 					account_id => $invoice->{'account_id'},
@@ -296,6 +298,19 @@ sub evaluate_transaction {
 					origin => $directdebit_id,
 					description => $directdebit_id,
 				});
+			}
+		}
+
+		my $diff = abs($sum_price - $amount);
+		if($diff > 0.05) {
+			warn "Incoming DirectDebit aggregate transaction $directdebit_id had amount $amount, while sum of payments created was $sum_price.\n";
+			print STDERR "OK to process like this? [Yn] ";
+			my $ok = <STDIN>;
+			1 while chomp $ok;
+			if($ok =~ /^(y.*|$)/g) {
+				print STDERR "\n";
+			} else {
+				die "OK, stopping.\n";
 			}
 		}
 		::mark_directdebit_file($dbh, $file->{'id'}, "SUCCESS");
