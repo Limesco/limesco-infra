@@ -368,22 +368,25 @@ sub evaluate_transaction {
 			warn "  Account: " . $account->{'first_name'} . " " . $account->{'last_name'} . " (" . $account->{'company_name'} . ")\n";
 			warn "  Description: " . $description . "\n";
 			$|++;
-			print STDERR "OK to process like this? [Yn] ";
-			my $ok = <STDIN>;
-			1 while chomp $ok;
-			if($ok =~ /^(y.+|$)/g) {
-				create_payment($dbh, {
-					account_id => $account_id,
-					type => 'BANK_TRANSFER',
-					amount => $amount,
-					date => $date->ymd,
-					origin => $peer,
-					description => $description,
-				});
-				warn "OK, payment created.\n\n";
-				return 1;
-			} else {
-				warn "OK, skipped.\n\n";
+			while(1) {
+				print STDERR "OK to process like this? [Yn] ";
+				my $ok = <STDIN>;
+				1 while chomp $ok;
+				if($ok =~ /^(y.*|$)/i) {
+					create_payment($dbh, {
+						account_id => $account_id,
+						type => 'BANK_TRANSFER',
+						amount => $amount,
+						date => $date->ymd,
+						origin => $peer,
+						description => $description,
+					});
+					warn "OK, payment created.\n\n";
+					return 1;
+				} elsif($ok =~ /^n.*/i) {
+					warn "OK, skipped.\n\n";
+					return 0;
+				}
 			}
 		} else {
 			warn "Transaction at " . $date->ymd . " of $amount from $peer was known bank account but account ID $account_id did not exist at that date.\n";
