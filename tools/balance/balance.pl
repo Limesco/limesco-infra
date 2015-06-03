@@ -87,7 +87,7 @@ if(!caller) {
 
 sub sprintf_money {
 	my ($amount) = @_;
-	return sprintf("%6s", sprintf("%.2f", $amount));
+	return sprintf("%7s", sprintf("%.2f", $amount));
 }
 
 =head3 list_payments($lim, [$account_id])
