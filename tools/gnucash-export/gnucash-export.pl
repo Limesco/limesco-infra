@@ -6,7 +6,8 @@ use lib '../lib';
 use lib '../../lib';
 use Limesco;
 use Data::Dumper;
-#use IPC::Run qw(run);
+use v5.14; # Unicode string features
+use open qw( :encoding(UTF-8) :std);
 
 =head1 gnucash-export.pl
 
