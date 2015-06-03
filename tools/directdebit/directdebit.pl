@@ -325,16 +325,36 @@ sub create_directdebit_transaction {
 	my ($lim, $authorization, $invoice) = @_;
 	my $dbh = $lim->get_database_handle();
 
-	if($invoice->{'rounded_with_taxes'} < 0) {
+	if($invoice->{'rounded_with_taxes'} <= 0) {
 		die "Cannot create directdebit transaction for invoice amount below zero.";
 	}
 
 	# Status must be "NEW" until the transaction is claimed in a DD file
 	my $status = 'NEW';
 
-	my $sth = $dbh->prepare("INSERT INTO directdebit_transaction (invoice_id, authorization_id, status)
-		VALUES (?, ?, ?)");
-	$sth->execute($invoice->{'id'}, $authorization, $status);
+	# XXX Hack: activation costs are on an invoice, but are almost always already paid, so don't
+	# put them in a directdebit file.
+	# The right fix for this is to bookkeep the current balance of a user, put it on an invoice
+	# along with a "remaining payment" note, and only collect that remaining payment.
+	# This subroutine computes the amount of money to subtract from the total invoice price.
+	my $amount = $invoice->{'rounded_with_taxes'};
+	{
+		my $sth = $dbh->prepare("SELECT item_count, item_price FROM invoice_itemline WHERE invoice_id=? AND item_price > 10 AND description LIKE 'Activatie SIM-kaart'");
+		$sth->execute($invoice->{'id'});
+		while(my $line = $sth->fetchrow_arrayref()) {
+			if($line->[1] != 10.33060000) {
+				die "Activation price or count is off on invoice " . $invoice->{'id'};
+			}
+			$amount -= 12.50;
+		}
+	}
+	if($amount <= 0) {
+		die "Cannot create directdebit transaction for invoice amount below zero.";
+	}
+
+	my $sth = $dbh->prepare("INSERT INTO directdebit_transaction (invoice_id, authorization_id, status, amount)
+		VALUES (?, ?, ?, ?)");
+	$sth->execute($invoice->{'id'}, $authorization, $status, $amount);
 
 	my $dd_trans_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "directdebit_transaction_id_seq"});
 	return {
@@ -343,6 +363,7 @@ sub create_directdebit_transaction {
 		authorization_id => $authorization,
 		directdebit_file_id => undef,
 		status => $status,
+		amount => $amount,
 	};
 }
 
@@ -549,9 +570,8 @@ sub export_directdebit_file {
 	my @transactions;
 	{
 		my $transactions_sth = $dbh->prepare("SELECT * FROM directdebit_transaction
-			FULL JOIN invoice ON directdebit_transaction.invoice_id = invoice.id
 			FULL JOIN account_directdebit_info ON directdebit_transaction.authorization_id = account_directdebit_info.authorization_id
-			WHERE directdebit_file_id=?");
+			WHERE directdebit_file_id=? ORDER BY invoice_id");
 		$transactions_sth->execute($file_id);
 		while(my $t = $transactions_sth->fetchrow_hashref) {
 			push @transactions, $t;
@@ -564,39 +584,10 @@ sub export_directdebit_file {
 
 	$file->{'creation_time'} =~ s/ /T/;
 
-	# XXX Hack: activation costs are on an invoice, but are almost always already paid, so don't
-	# put them in a directdebit file.
-	# The right fix for this is to bookkeep the current balance of a user, put it on an invoice
-	# along with a "remaining payment" note, and only collect that remaining payment.
-	# This subroutine computes the amount of money to subtract from the total invoice price.
-	my $invoice_price = sub {
-		my ($invoice_id) = @_;
-		my $sth = $dbh->prepare("SELECT item_count, item_price FROM invoice_itemline WHERE invoice_id=? AND item_price > 30 AND description LIKE 'Activatie SIM-kaart'");
-		$sth->execute($invoice_id);
-		my $number_of_activations = 0;
-		while(my $line = $sth->fetchrow_arrayref()) {
-			if($line->[0] != 1 || $line->[1] != 34.7107) {
-				die "Activation price or count is off on invoice $invoice_id";
-			}
-			$number_of_activations += $line->[0];
-		}
-		my $subtract = $number_of_activations * 42;
-		$sth = $dbh->prepare("SELECT rounded_with_taxes FROM invoice WHERE id=?");
-		$sth->execute($invoice_id);
-		my $invoice = $sth->fetchrow_arrayref();
-		return $invoice->[0] - $subtract;
-	};
-
 	my $sum = 0;
-	my @new_transactions;
 	foreach(@transactions) {
-		my $price = $invoice_price->($_->{'invoice_id'});
-		if($price > 0) {
-			$sum += $price;
-			push @new_transactions, $_;
-		}
+		$sum += $_->{'amount'};
 	}
-	@transactions = @new_transactions;
 	$sum = sprintf("%.2f", $sum);
 
 	my @export_xml;
@@ -635,8 +626,8 @@ sub export_directdebit_file {
 		'    <Nm>Limesco B.V.</Nm>',
 		'    <PstlAdr>',
 		'     <Ctry>NL</Ctry>',
-		'     <AdrLine>Sophiaweg 34</AdrLine>',
-		'     <AdrLine>6523NJ Nijmegen</AdrLine>',
+		'     <AdrLine>Toernooiveld 100</AdrLine>',
+		'     <AdrLine>6525EC Nijmegen</AdrLine>',
 		'    </PstlAdr>',
 		'   </Cdtr>',
 		'   <CdtrAcct>',
@@ -664,14 +655,13 @@ sub export_directdebit_file {
 		'    </Id>',
 		'   </CdtrSchmeId>';
 	foreach(@transactions) {
-		my $price = sprintf("%.2f", $invoice_price->($_->{'invoice_id'}));
 		push @export_xml,
 			'   <DrctDbtTxInf>',
 			'    <PmtId>',
 			'     <InstrId>' . $_->{'invoice_id'} . '</InstrId>',
 			'     <EndToEndId>' . $_->{'invoice_id'} . '</EndToEndId>',
 			'    </PmtId>',
-			'    <InstdAmt Ccy="EUR">' . $price . '</InstdAmt>',
+			'    <InstdAmt Ccy="EUR">' . $_->{'amount'} . '</InstdAmt>',
 			'    <DrctDbtTx>',
 			'     <MndtRltdInf>',
 			'      <MndtId>' . $_->{'authorization_id'} . '</MndtId>',

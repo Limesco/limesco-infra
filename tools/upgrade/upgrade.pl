@@ -117,7 +117,7 @@ Returns the latest schema version supported by this tool.
 =cut
 
 sub get_latest_schema_version {
-	return 11;
+	return 12;
 }
 
 =head3 update_schema_version($lim, $dbh, $version)
@@ -527,7 +527,15 @@ sub upgrade_database {
 			$current_version = 11;
 		}
 
-		if($current_version > 11) {
+		if($current_version == 11) {
+			$dbh->do("ALTER TABLE directdebit_transaction ALTER COLUMN invoice_id DROP NOT NULL;");
+			$dbh->do("ALTER TABLE directdebit_transaction ADD COLUMN amount MONEY2;");
+			$dbh->do("ALTER TABLE directdebit_transaction ADD CHECK(amount > 0);");
+			update_schema_version($lim, $dbh, 12);
+			$current_version = 12;
+		}
+
+		if($current_version > 12) {
 			die "Not implemented";
 		}
 
@@ -577,13 +585,16 @@ sub add_directdebit_tables {
 
 	$dbh->do("CREATE TABLE directdebit_transaction (
 		id SERIAL NOT NULL,
-		invoice_id INVOICEID NOT NULL REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
+		invoice_id INVOICEID REFERENCES invoice(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
 		authorization_id SHORTTEXT NOT NULL REFERENCES account_directdebit_info(authorization_id),
 		status DDTRANSACTIONSTATUS NOT NULL,
 		directdebit_file_id INT NULL REFERENCES directdebit_file(id) ON DELETE RESTRICT ON UPDATE RESTRICT DEFERRABLE INITIALLY DEFERRED,
+		amount MONEY2,
 
 		-- No transaction can be successful or failed without being in a directdebit file
 		CHECK(directdebit_file_id IS NOT NULL OR status='NEW'),
+		-- Amount must be positive
+		CHECK(amount > 0),
 		-- No invoice can be in two transactions of the same status
 		UNIQUE(invoice_id, status)
 	);");
