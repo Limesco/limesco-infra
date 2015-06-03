@@ -254,7 +254,7 @@ sub print_directdebit {
 			for ( 0 .. keys $invoice->{activation_costs} ) {
 				my $act_data = $invoice->{activation_costs}[$_];
 				if ($act_data) {
-					if ($act_data->{item_price} != 34.71070000) {
+					if ($act_data->{item_price} != 10.33060000) {
 						die "print_directdebit(): invalid item_price for activation costs. Check data for invoice_id $invoice->{invoice_id}.";
 					}
 					$num_actcosts++;
