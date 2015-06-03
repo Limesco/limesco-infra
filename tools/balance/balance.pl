@@ -8,7 +8,7 @@ use Limesco;
 use JSON;
 use Try::Tiny;
 
-do '../invoice-export/invoice-export.pl' or die $!;
+do '../invoice-export/invoice-export.pl' or die $! unless UNIVERSAL::can("main", "list_invoices");
 
 =head1 balance.pl
 

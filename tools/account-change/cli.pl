@@ -11,6 +11,7 @@ do '../sim-change/sim-change.pl' or die $!;
 do '../invoice-export/invoice-export.pl' or die $!;
 do '../directdebit/directdebit.pl' unless UNIVERSAL::can("main", "generate_directdebit_authorization") or die $!;
 do '../directdebit/bic-convert.pl' or die $!;
+do '../balance/balance.pl' or die $!;
 
 my $lim = Limesco->new_from_args(\@ARGV);
 my $shell = LimescoShell->new($lim);
@@ -1232,4 +1233,69 @@ HELP
 
 sub smry_queue {
 	return "list and add queued itemlines";
+}
+
+sub run_balance {
+	my ($self, $date) = @_;
+
+	if($self->{'account'}) {
+		my @p_and_i = ::get_payments_and_invoices($lim, $self->{'account'}{'id'}, $date);
+		foreach(@p_and_i) {
+			my $descr;
+			my $amount;
+			if($_->{'objecttype'} eq "PAYMENT") {
+				$amount = $_->{'amount'};
+				$descr = lc($_->{'type'}) .  " " . $_->{'origin'};
+			} else {
+				$amount = -$_->{'rounded_with_taxes'};
+				$descr = $_->{'id'};
+			}
+			printf("%s %s %40s  %s -> %s\n", lc($_->{'objecttype'}), $_->{'date'}, $descr,
+				::sprintf_money($amount), ::sprintf_money($_->{'balance'}));
+		}
+	} else {
+		my $dbh = $lim->get_database_handle();
+		my $sth = $dbh->prepare("SELECT DISTINCT(id) FROM account ORDER BY id ASC");
+		$sth->execute();
+		my @accounts;
+		while(my $account_id = $sth->fetchrow_hashref) {
+			$account_id = $account_id->{'id'};
+			my $asth = $dbh->prepare("SELECT id, first_name, last_name, company_name FROM account WHERE id=? AND
+				period=(SELECT period FROM account WHERE id=? ORDER BY lower(period) DESC LIMIT 1)");
+			$asth->execute($account_id, $account_id);
+			push @accounts, $asth->fetchrow_hashref;
+		}
+		for my $account (@accounts) {
+			my @p_and_i = ::get_payments_and_invoices($lim, $account->{'id'}, $date);
+			my $balance = @p_and_i ? (pop @p_and_i)->{'balance'} : 0;
+			my $name = sprintf("%s %s", $account->{'first_name'}, $account->{'last_name'});
+			if($account->{'company_name'}) {
+				$name = $account->{'company_name'} . " ($name)";
+			}
+			printf("%3d %45s -> %s\n", $account->{'id'}, $name, ::sprintf_money($balance));
+		}
+	}
+}
+
+sub help_balance {
+	return <<HELP;
+balance [date]
+
+If an account is selected, list all invoices and payments along with their
+running balance as of the given date (or all of them if no date is given).
+The format is as follows:
+
+<pay/inv> <date>   <transaction type> <information>  <amount> -> <new balance>
+
+If no account is selected, list the balance for every account as of the given
+date (or taking into account all invoices and payments if no date is given).
+The format is as follows:
+
+<account ID>                <account name> [(<company name>)] -> <balance>
+
+HELP
+}
+
+sub smry_balance {
+	return "list user's balance after invoices and payments";
 }
