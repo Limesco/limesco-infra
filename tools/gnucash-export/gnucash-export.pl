@@ -263,8 +263,8 @@ sub print_directdebit {
 		}
 
 		# Correct invoice amounts for activation costs
-		$invoice->{rounded_with_taxes} -= $num_actcosts*42 if ($num_actcosts > 0);
-		$invoice->{rounded_without_taxes} -= $num_actcosts*34.7107 if ($num_actcosts > 0);
+		$invoice->{rounded_with_taxes} -= $num_actcosts*12.50 if ($num_actcosts > 0);
+		$invoice->{rounded_without_taxes} -= $num_actcosts*10.33 if ($num_actcosts > 0);
 
 		printf("%s\t%s\t%6.2f\t%6.2f\t%d\t%s\n",
 			$invoice->{invoice_id},
