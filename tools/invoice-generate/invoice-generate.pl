@@ -319,17 +319,28 @@ sub phonenumber_to_apn_type_in_month {
 		$account_id, $yearmonth, $number);
 }
 
-=head3 generate_invoice($lim, $account_id, $date)
+=head3 generate_invoice($lim, $account_id, $date, [$charge_sim_activations, $charge_account_contribution, $charge_sim_monthly_costs, $charge_cdrs, $charge_queued_itemlines])
 
 Create an invoice in the database for account $account_id, with invoice date
 $date (as a DateTime-compatible object). Returns the invoice ID if an invoice was
 created, undef if there was nothing to invoice; throws an exception if invoice
 generation failed for some reason.
 
+If none of the charge options are given, all are enabled. Otherwise, only those
+specifically given are enabled.
+
 =cut
 
 sub generate_invoice {
-	my ($lim, $account_id, $date) = @_;
+	my ($lim, $account_id, $date, $charge_sim_activations, $charge_account_contribution, $charge_sim_monthly_costs, $charge_cdrs, $charge_queued_itemlines) = @_;
+	if(@_ == 3) {
+		$charge_sim_activations = 1;
+		$charge_account_contribution = 1;
+		$charge_sim_monthly_costs = 1;
+		$charge_cdrs = 1;
+		$charge_queued_itemlines = 1;
+	}
+
 	my $dbh = $lim->get_database_handle();
 
 	# TODO: this could go in the pricing table?
@@ -394,13 +405,15 @@ sub generate_invoice {
 		my $account = get_account($dbh, $account_id, $date);
 
 		# Add activation costs for all unactivated SIMs
-		my $sth = $dbh->prepare("SELECT * FROM sim WHERE owner_account_id=? AND activation_invoice_id IS NULL AND state != 'DISABLED' AND period @> ?::date");
-		$sth->execute($account_id, $date);
-		while(my $sim = $sth->fetchrow_hashref) {
-			update_sim($dbh, $sim->{'iccid'}, {
-				activation_invoice_id => $invoice_id,
-			}, $date);
-			$normal_itemline->($invoice_id, "Activatie SIM-kaart", 1, $SIM_CARD_ACTIVATION_PRICE);
+		if($charge_sim_activations) {
+			my $sth = $dbh->prepare("SELECT * FROM sim WHERE owner_account_id=? AND activation_invoice_id IS NULL AND state != 'DISABLED' AND period @> ?::date");
+			$sth->execute($account_id, $date);
+			while(my $sim = $sth->fetchrow_hashref) {
+				update_sim($dbh, $sim->{'iccid'}, {
+					activation_invoice_id => $invoice_id,
+				}, $date);
+				$normal_itemline->($invoice_id, "Activatie SIM-kaart", 1, $SIM_CARD_ACTIVATION_PRICE);
+			}
 		}
 
 		# Prepare contribution calculation: establish the last contribution invoicing date
@@ -418,261 +431,271 @@ sub generate_invoice {
 		}
 
 		# Add monthly SIM costs as of invoice date
-		$sth = $dbh->prepare("SELECT * FROM sim LEFT JOIN phonenumber ON (sim.iccid = phonenumber.sim_iccid) WHERE owner_account_id=? AND sim.period @> ?::date AND phonenumber.period @> ?::date AND state='ACTIVATED'");
+		my $sth = $dbh->prepare("SELECT * FROM sim LEFT JOIN phonenumber ON (sim.iccid = phonenumber.sim_iccid) WHERE owner_account_id=? AND sim.period @> ?::date AND phonenumber.period @> ?::date AND state='ACTIVATED'");
 		$sth->execute($account_id, $date->ymd, $date->ymd);
 		while(my $sim = $sth->fetchrow_hashref) {
 			# Per-account contribution invoicing: this is checked per SIM, as it is only
 			# invoiced for accounts that had active SIMs on the first of the month
-			my $contribution_month = first_day_of_next_month($contribution_start);
-			until($contribution_month > $date) {
-				my $already_invoiced = 0;
-				for my $paid_month (@contribution_months) {
-					if($paid_month == $contribution_month) {
-						$already_invoiced = 1;
-						last;
+			if($charge_account_contribution) {
+				my $contribution_month = first_day_of_next_month($contribution_start);
+				until($contribution_month > $date) {
+					my $already_invoiced = 0;
+					for my $paid_month (@contribution_months) {
+						if($paid_month == $contribution_month) {
+							$already_invoiced = 1;
+							last;
+						}
 					}
-				}
-				my $sim_start_date = get_sim_contract_start_date($dbh, $sim->{'iccid'});
-				if(!$already_invoiced && $sim_start_date <= $contribution_month) {
-					if($account->{'contribution'} > 0) {
-						my $description = "Vrije bijdrage " . $contribution_month->ymd;
-						$normal_itemline->($invoice_id, $description, 1, $account->{'contribution'});
+					my $sim_start_date = get_sim_contract_start_date($dbh, $sim->{'iccid'});
+					if(!$already_invoiced && $sim_start_date <= $contribution_month) {
+						if($account->{'contribution'} > 0) {
+							my $description = "Vrije bijdrage " . $contribution_month->ymd;
+							$normal_itemline->($invoice_id, $description, 1, $account->{'contribution'});
+						}
+						push @contribution_months, $contribution_month;
 					}
-					push @contribution_months, $contribution_month;
+					$contribution_month = first_day_of_next_month($contribution_month);
 				}
-				$contribution_month = first_day_of_next_month($contribution_month);
 			}
 
 			# Start of monthly cost invoicing: first of month after last invoiced month
 			# If SIM was never invoiced, it's the activation date
-			my $monthly_cost_start;
-			if($sim->{'last_monthly_fees_invoice_id'}) {
-				my ($year, $month, $day) = $sim->{'last_monthly_fees_month'} =~ /^(\d{4})-(\d\d)-(\d\d)$/;
-				if($year == $date->year && $month == $date->month) {
-					# SIM contract was already invoiced this month
-					next;
-				}
-				my $dt = DateTime->new(year => $year, month => $month, day => $day);
-				$monthly_cost_start = first_day_of_next_month($dt);
-			} else {
-				$monthly_cost_start = get_sim_contract_start_date($dbh, $sim->{'iccid'});
-				if(!$monthly_cost_start) {
-					# SIM contract hasn't started yet
-					next;
-				}
-			}
-
-			# End of monthly cost invoicing: deactivation date / last of this month
-			my $monthly_cost_end = get_sim_contract_end_date($dbh, $sim->{'iccid'});
-			if(!$monthly_cost_end) {
-				# SIM contract hasn't ended yet, so end of this month
-				$monthly_cost_end = last_day_of_this_month($date);
-			}
-
-			if($monthly_cost_end < $monthly_cost_start) {
-				die "SIM ended before it began, that should be impossible: " . $monthly_cost_end->ymd . " < " . $monthly_cost_start->ymd;
-			}
-
-			my $invoicing_month = $monthly_cost_start;
-			until($invoicing_month > $monthly_cost_end) {
-				my $sim_monthly_price_description;
-				my $sim_monthly_price;
-				if($sim->{'data_type'} eq "APN_500MB") {
-					$sim_monthly_price_description = "Vaste kosten (500 MB-bundel)\n $sim->{'phonenumber'}\n SIM: $sim->{'iccid'}";
-					$sim_monthly_price = $SIM_APN_500_MB_MONTHLY_PRICE;
-				} elsif($sim->{'data_type'} eq "APN_2000MB") {
-					$sim_monthly_price_description = "Vaste kosten (2000 MB-bundel)\n $sim->{'phonenumber'}\n SIM: $sim->{'iccid'}";
-					$sim_monthly_price = $SIM_APN_2000_MB_MONTHLY_PRICE;
-				} elsif($sim->{'data_type'} eq "APN_NODATA") {
-					$sim_monthly_price_description = "Vaste kosten\n $sim->{'phonenumber'}\n SIM: $sim->{'iccid'}";
-					$sim_monthly_price = $SIM_NO_DATA_MONTHLY_PRICE;
+			if($charge_sim_monthly_costs) {
+				my $monthly_cost_start;
+				if($sim->{'last_monthly_fees_invoice_id'}) {
+					my ($year, $month, $day) = $sim->{'last_monthly_fees_month'} =~ /^(\d{4})-(\d\d)-(\d\d)$/;
+					if($year == $date->year && $month == $date->month) {
+						# SIM contract was already invoiced this month
+						next;
+					}
+					my $dt = DateTime->new(year => $year, month => $month, day => $day);
+					$monthly_cost_start = first_day_of_next_month($dt);
 				} else {
-					die "Unknwon data type: " . $sim->{'data_type'};
-				}
-
-				# TODO: end_of_this_period is until the next change of APN and
-				# should use the APN in this period to compute description and price
-				my $end_of_this_period = last_day_of_this_month($invoicing_month->clone);
-				if($end_of_this_period > $monthly_cost_end) {
-					$end_of_this_period = $monthly_cost_end->clone;
-				}
-
-				my $factor = get_partial_month_factor($invoicing_month, $end_of_this_period);
-				my $description = $sim_monthly_price_description . "\n";
-				$description .= $invoicing_month->ymd . " - " . $end_of_this_period->ymd;
-				$normal_itemline->($invoice_id, $description, 1, $sim_monthly_price * $factor);
-
-				$invoicing_month = $end_of_this_period->add(days => 1);
-			}
-			# TODO: this calls die() when $date is already a 'history record' (i.e. there
-			# is a planned update for this SIM after $date); this can be made more robust
-			# by implementing 'history changing support' in update_sim so that it is able
-			# to update all records starting with $date into infinity.
-			update_sim($dbh, $sim->{'iccid'}, {
-				last_monthly_fees_invoice_id => $invoice_id,
-				last_monthly_fees_month => $date,
-			}, $date);
-		}
-
-		update_account($dbh, $account->{'id'}, {
-			last_contribution_month => $date,
-		}, $date);
-		$account->{'last_contribution_month'} = $date;
-
-		my %pricings;
-		my $get_pricing = sub {
-			my $pid = $_[0];
-			if(!$pricings{$pid}) {
-				my $sth = $dbh->prepare("SELECT * FROM pricing WHERE id=?");
-				$sth->execute($pid);
-				$pricings{$pid} = $sth->fetchrow_hashref;
-			}
-			if(!$pricings{$pid}) {
-				die "Failed to generate invoice: failed to get pricing ID $pid\n";
-			}
-			return $pricings{$pid};
-		};
-
-		my $beyond_cdr_period = $date->clone->set(day => 1);
-		# Group CDRs by pricing ID
-		$sth = $dbh->prepare("SELECT * FROM cdr
-			FULL JOIN speakup_account ON lower(cdr.speakup_account)=lower(speakup_account.name)
-			WHERE speakup_account.period @> cdr.time::date
-			AND speakup_account.account_id=?
-			AND cdr.time < ?::date
-			AND cdr.invoice_id IS NULL
-			AND cdr.pricing_info IS NOT NULL
-			ORDER BY cdr.time ASC;");
-		$sth->execute($account_id, $beyond_cdr_period);
-		my %cdr_per_pricing_rule;
-		while(my $cdr = $sth->fetchrow_hashref) {
-			my $pricing_id = $cdr->{'pricing_id'};
-			if($cdr->{'pricing_id_two'}) {
-				$pricing_id .= "," . $cdr->{'pricing_id_two'};
-			}
-			$cdr_per_pricing_rule{$pricing_id} ||= [];
-			push @{$cdr_per_pricing_rule{$pricing_id}}, $cdr;
-			$dbh->do("UPDATE cdr SET invoice_id=? WHERE id=?", undef, $invoice_id, $cdr->{'id'});
-		}
-
-		my %month_to_number_to_data_cdrs;
-		foreach(reverse sort keys %cdr_per_pricing_rule) {
-			my $pricing;
-			my $pricing_two;
-			if(/^(\d+),(\d+)$/) {
-				$pricing = $get_pricing->($1);
-				$pricing_two = $get_pricing->($2);
-			} else {
-				$pricing = $get_pricing->($_);
-			}
-			my @cdrs = @{$cdr_per_pricing_rule{$_}};
-
-			if($pricing->{'service'} eq "SMS") {
-				my $num = @cdrs;
-				my $price_per_line = $pricing->{'price_per_line'};
-				my $description = sprintf("%s", $pricing->{'description'});
-				$normal_itemline->($invoice_id, $description, $num, $price_per_line, $pricing->{'service'});
-			} elsif($pricing->{'service'} eq "VOICE") {
-				my $sum_units = 0;
-				my $sum_prices = 0;
-				my $number_of_lines = 0;
-				foreach(@cdrs) {
-					$number_of_lines += 1;
-					$sum_units += $_->{'units'};
-					$sum_prices += $_->{'computed_price'};
-				}
-				my $description = "Bellen " . $pricing->{'description'};
-				my $p2hidden = 1;
-				if($pricing_two) {
-					$description .= " - " . $pricing_two->{'description'};
-					$p2hidden = $pricing_two->{'hidden'};
-				}
-
-				if($pricing->{'hidden'} && $p2hidden && $sum_prices == 0) {
-					# hide this itemline
-				} else {
-					$duration_itemline->($invoice_id, $description, $sum_prices, $number_of_lines, $sum_units, $pricing);
-				}
-			} elsif($pricing->{'service'} eq "DATA" && (!$pricing->{'source'} || $pricing->{'source'}[0] eq "Netherlands - Mobile - SpeakUp")) {
-				foreach my $cdr (@cdrs) {
-					my ($month) = $cdr->{'time'} =~ /^(\d{4}-\d{2})-\d{2} [\d:]+$/;
-					if(!$month) {
-						die "Could not parse CDR timestamp: " . $cdr->{'time'};
+					$monthly_cost_start = get_sim_contract_start_date($dbh, $sim->{'iccid'});
+					if(!$monthly_cost_start) {
+						# SIM contract hasn't started yet
+						next;
 					}
-					my $number = $cdr->{'from'};
-					$month_to_number_to_data_cdrs{$month} ||= {};
-					$month_to_number_to_data_cdrs{$month}{$number} ||= [];
-					push @{$month_to_number_to_data_cdrs{$month}{$number}}, $cdr;
 				}
-			} elsif($pricing->{'service'} eq "DATA") {
-				# Roaming data use: use price-per-unit as in database
-				my $sum_units = 0;
-				foreach(@cdrs) {
-					$sum_units += $_->{'units'};
-				}
-				my $description = $pricing->{'description'};
-				$normal_itemline->($invoice_id, $description, $sum_units, $pricing->{'price_per_unit'}, "DATA");
-			} else {
-				die "Unknown pricing service referenced by CDR pricing information\n";
-			}
-		}
 
-		# Process data CDRs per month
-		# APN_x at the beginning of the month counts for that month
-		# make a sum per month; if it's a bundle make one item line with inside and outside usage
-		# if it's not a bundle make an itemline with tiered usage
-		foreach my $month (keys %month_to_number_to_data_cdrs) {
-			foreach my $number (keys %{$month_to_number_to_data_cdrs{$month}}) {
-				my $apn = phonenumber_to_apn_type_in_month($dbh, $account_id, $number, $month);
-				my $sum = 0;
-				foreach(@{$month_to_number_to_data_cdrs{$month}{$number}}) {
-					$sum += $_->{'units'};
+				# End of monthly cost invoicing: deactivation date / last of this month
+				my $monthly_cost_end = get_sim_contract_end_date($dbh, $sim->{'iccid'});
+				if(!$monthly_cost_end) {
+					# SIM contract hasn't ended yet, so end of this month
+					$monthly_cost_end = last_day_of_this_month($date);
 				}
-				if($apn eq "APN_500MB" || $apn eq "APN_2000MB") {
-					my $in_bundle_usage = $sum;
-					my $out_bundle_usage = 0;
-					my $limit = $apn eq "APN_500MB" ? 500 * 1024 : 2000 * 1024;
-					if($in_bundle_usage > $limit) {
-						$out_bundle_usage = $in_bundle_usage - $limit;
-						$in_bundle_usage = $limit;
-					}
-					my $description = sprintf("%s (bundel %s)", "Data Nederland", $month);
-					$normal_itemline->($invoice_id, $description, $in_bundle_usage, 0, "DATA");
-					if($out_bundle_usage > 0) {
-						$description = sprintf("%s (buiten bundel %s, SIM %s)", "Data Nederland", $month, $number);
-						$normal_itemline->($invoice_id, $description, $out_bundle_usage, $DATA_USAGE_OUT_OF_BUNDLE_PER_MB / 1000, "DATA");
-					}
-				} elsif($apn eq "APN_NODATA") {
-					my ($tier1, $tier2, $tier3) = (0, 0, 0);
-					if($sum > 1000 * 1024) {
-						$tier1 = 500 * 1024;
-						$tier2 = 500 * 1024;
-						$tier3 = $sum - 1000 * 1024;
-					} elsif($sum > 500 * 1024) {
-						$tier1 = 500 * 1024;
-						$tier2 = $sum - 500 * 1024;
+
+				if($monthly_cost_end < $monthly_cost_start) {
+					die "SIM ended before it began, that should be impossible: " . $monthly_cost_end->ymd . " < " . $monthly_cost_start->ymd;
+				}
+
+				my $invoicing_month = $monthly_cost_start;
+				until($invoicing_month > $monthly_cost_end) {
+					my $sim_monthly_price_description;
+					my $sim_monthly_price;
+					if($sim->{'data_type'} eq "APN_500MB") {
+						$sim_monthly_price_description = "Vaste kosten (500 MB-bundel)\n $sim->{'phonenumber'}\n SIM: $sim->{'iccid'}";
+						$sim_monthly_price = $SIM_APN_500_MB_MONTHLY_PRICE;
+					} elsif($sim->{'data_type'} eq "APN_2000MB") {
+						$sim_monthly_price_description = "Vaste kosten (2000 MB-bundel)\n $sim->{'phonenumber'}\n SIM: $sim->{'iccid'}";
+						$sim_monthly_price = $SIM_APN_2000_MB_MONTHLY_PRICE;
+					} elsif($sim->{'data_type'} eq "APN_NODATA") {
+						$sim_monthly_price_description = "Vaste kosten\n $sim->{'phonenumber'}\n SIM: $sim->{'iccid'}";
+						$sim_monthly_price = $SIM_NO_DATA_MONTHLY_PRICE;
 					} else {
-						$tier1 = $sum;
+						die "Unknwon data type: " . $sim->{'data_type'};
 					}
-					$normal_itemline->($invoice_id, "Dataverbruik onder 500 MB", $tier1, $DATA_USAGE_TIER1_PER_MB / 1000, "DATA");
-					if($tier2 > 0 || $tier3 > 0) {
-						$normal_itemline->($invoice_id, "Dataverbruik onder 1000 MB", $tier2, $DATA_USAGE_TIER2_PER_MB / 1000, "DATA");
-						if($tier3 > 0) {
-							$normal_itemline->($invoice_id, "Dataverbruik boven 1000 MB", $tier3, $DATA_USAGE_TIER3_PER_MB / 1000, "DATA");
-						}
+
+					# TODO: end_of_this_period is until the next change of APN and
+					# should use the APN in this period to compute description and price
+					my $end_of_this_period = last_day_of_this_month($invoicing_month->clone);
+					if($end_of_this_period > $monthly_cost_end) {
+						$end_of_this_period = $monthly_cost_end->clone;
 					}
+
+					my $factor = get_partial_month_factor($invoicing_month, $end_of_this_period);
+					my $description = $sim_monthly_price_description . "\n";
+					$description .= $invoicing_month->ymd . " - " . $end_of_this_period->ymd;
+					$normal_itemline->($invoice_id, $description, 1, $sim_monthly_price * $factor);
+
+					$invoicing_month = $end_of_this_period->add(days => 1);
+				}
+				# TODO: this calls die() when $date is already a 'history record' (i.e. there
+				# is a planned update for this SIM after $date); this can be made more robust
+				# by implementing 'history changing support' in update_sim so that it is able
+				# to update all records starting with $date into infinity.
+				update_sim($dbh, $sim->{'iccid'}, {
+					last_monthly_fees_invoice_id => $invoice_id,
+					last_monthly_fees_month => $date,
+				}, $date);
+			}
+		}
+
+		if($charge_account_contribution) {
+			update_account($dbh, $account->{'id'}, {
+				last_contribution_month => $date,
+			}, $date);
+			$account->{'last_contribution_month'} = $date;
+		}
+
+		if($charge_cdrs) {
+			my %pricings;
+			my $get_pricing = sub {
+				my $pid = $_[0];
+				if(!$pricings{$pid}) {
+					my $sth = $dbh->prepare("SELECT * FROM pricing WHERE id=?");
+					$sth->execute($pid);
+					$pricings{$pid} = $sth->fetchrow_hashref;
+				}
+				if(!$pricings{$pid}) {
+					die "Failed to generate invoice: failed to get pricing ID $pid\n";
+				}
+				return $pricings{$pid};
+			};
+
+			my $beyond_cdr_period = $date->clone->set(day => 1);
+			# Group CDRs by pricing ID
+			$sth = $dbh->prepare("SELECT * FROM cdr
+				FULL JOIN speakup_account ON lower(cdr.speakup_account)=lower(speakup_account.name)
+				WHERE speakup_account.period @> cdr.time::date
+				AND speakup_account.account_id=?
+				AND cdr.time < ?::date
+				AND cdr.invoice_id IS NULL
+				AND cdr.pricing_info IS NOT NULL
+				ORDER BY cdr.time ASC;");
+			$sth->execute($account_id, $beyond_cdr_period);
+			my %cdr_per_pricing_rule;
+			while(my $cdr = $sth->fetchrow_hashref) {
+				my $pricing_id = $cdr->{'pricing_id'};
+				if($cdr->{'pricing_id_two'}) {
+					$pricing_id .= "," . $cdr->{'pricing_id_two'};
+				}
+				$cdr_per_pricing_rule{$pricing_id} ||= [];
+				push @{$cdr_per_pricing_rule{$pricing_id}}, $cdr;
+				$dbh->do("UPDATE cdr SET invoice_id=? WHERE id=?", undef, $invoice_id, $cdr->{'id'});
+			}
+
+			my %month_to_number_to_data_cdrs;
+			foreach(reverse sort keys %cdr_per_pricing_rule) {
+				my $pricing;
+				my $pricing_two;
+				if(/^(\d+),(\d+)$/) {
+					$pricing = $get_pricing->($1);
+					$pricing_two = $get_pricing->($2);
 				} else {
-					die "Unknown data APN\n";
+					$pricing = $get_pricing->($_);
+				}
+				my @cdrs = @{$cdr_per_pricing_rule{$_}};
+
+				if($pricing->{'service'} eq "SMS") {
+					my $num = @cdrs;
+					my $price_per_line = $pricing->{'price_per_line'};
+					my $description = sprintf("%s", $pricing->{'description'});
+					$normal_itemline->($invoice_id, $description, $num, $price_per_line, $pricing->{'service'});
+				} elsif($pricing->{'service'} eq "VOICE") {
+					my $sum_units = 0;
+					my $sum_prices = 0;
+					my $number_of_lines = 0;
+					foreach(@cdrs) {
+						$number_of_lines += 1;
+						$sum_units += $_->{'units'};
+						$sum_prices += $_->{'computed_price'};
+					}
+					my $description = "Bellen " . $pricing->{'description'};
+					my $p2hidden = 1;
+					if($pricing_two) {
+						$description .= " - " . $pricing_two->{'description'};
+						$p2hidden = $pricing_two->{'hidden'};
+					}
+
+					if($pricing->{'hidden'} && $p2hidden && $sum_prices == 0) {
+						# hide this itemline
+					} else {
+						$duration_itemline->($invoice_id, $description, $sum_prices, $number_of_lines, $sum_units, $pricing);
+					}
+				} elsif($pricing->{'service'} eq "DATA" && (!$pricing->{'source'} || $pricing->{'source'}[0] eq "Netherlands - Mobile - SpeakUp")) {
+					foreach my $cdr (@cdrs) {
+						my ($month) = $cdr->{'time'} =~ /^(\d{4}-\d{2})-\d{2} [\d:]+$/;
+						if(!$month) {
+							die "Could not parse CDR timestamp: " . $cdr->{'time'};
+						}
+						my $number = $cdr->{'from'};
+						$month_to_number_to_data_cdrs{$month} ||= {};
+						$month_to_number_to_data_cdrs{$month}{$number} ||= [];
+						push @{$month_to_number_to_data_cdrs{$month}{$number}}, $cdr;
+					}
+				} elsif($pricing->{'service'} eq "DATA") {
+					# Roaming data use: use price-per-unit as in database
+					my $sum_units = 0;
+					foreach(@cdrs) {
+						$sum_units += $_->{'units'};
+					}
+					my $description = $pricing->{'description'};
+					$normal_itemline->($invoice_id, $description, $sum_units, $pricing->{'price_per_unit'}, "DATA");
+				} else {
+					die "Unknown pricing service referenced by CDR pricing information\n";
+				}
+			}
+
+			# Process data CDRs per month
+			# APN_x at the beginning of the month counts for that month
+			# make a sum per month; if it's a bundle make one item line with inside and outside usage
+			# if it's not a bundle make an itemline with tiered usage
+			foreach my $month (keys %month_to_number_to_data_cdrs) {
+				foreach my $number (keys %{$month_to_number_to_data_cdrs{$month}}) {
+					my $apn = phonenumber_to_apn_type_in_month($dbh, $account_id, $number, $month);
+					my $sum = 0;
+					foreach(@{$month_to_number_to_data_cdrs{$month}{$number}}) {
+						$sum += $_->{'units'};
+					}
+					if($apn eq "APN_500MB" || $apn eq "APN_2000MB") {
+						my $in_bundle_usage = $sum;
+						my $out_bundle_usage = 0;
+						my $limit = $apn eq "APN_500MB" ? 500 * 1024 : 2000 * 1024;
+						if($in_bundle_usage > $limit) {
+							$out_bundle_usage = $in_bundle_usage - $limit;
+							$in_bundle_usage = $limit;
+						}
+						my $description = sprintf("%s (bundel %s)", "Data Nederland", $month);
+						$normal_itemline->($invoice_id, $description, $in_bundle_usage, 0, "DATA");
+						if($out_bundle_usage > 0) {
+							$description = sprintf("%s (buiten bundel %s, SIM %s)", "Data Nederland", $month, $number);
+							$normal_itemline->($invoice_id, $description, $out_bundle_usage, $DATA_USAGE_OUT_OF_BUNDLE_PER_MB / 1000, "DATA");
+						}
+					} elsif($apn eq "APN_NODATA") {
+						my ($tier1, $tier2, $tier3) = (0, 0, 0);
+						if($sum > 1000 * 1024) {
+							$tier1 = 500 * 1024;
+							$tier2 = 500 * 1024;
+							$tier3 = $sum - 1000 * 1024;
+						} elsif($sum > 500 * 1024) {
+							$tier1 = 500 * 1024;
+							$tier2 = $sum - 500 * 1024;
+						} else {
+							$tier1 = $sum;
+						}
+						$normal_itemline->($invoice_id, "Dataverbruik onder 500 MB", $tier1, $DATA_USAGE_TIER1_PER_MB / 1000, "DATA");
+						if($tier2 > 0 || $tier3 > 0) {
+							$normal_itemline->($invoice_id, "Dataverbruik onder 1000 MB", $tier2, $DATA_USAGE_TIER2_PER_MB / 1000, "DATA");
+							if($tier3 > 0) {
+								$normal_itemline->($invoice_id, "Dataverbruik boven 1000 MB", $tier3, $DATA_USAGE_TIER3_PER_MB / 1000, "DATA");
+							}
+						}
+					} else {
+						die "Unknown data APN\n";
+					}
 				}
 			}
 		}
 
 		# Queued itemlines
 		my @queued_itemlines;
-		$sth = $dbh->prepare("SELECT * FROM invoice_itemline WHERE queued_for_account_id=?");
-		$sth->execute($account_id);
-		while(my $row = $sth->fetchrow_hashref) {
-			push @queued_itemlines, $row;
+		if($charge_queued_itemlines) {
+			$sth = $dbh->prepare("SELECT * FROM invoice_itemline WHERE queued_for_account_id=?");
+			$sth->execute($account_id);
+			while(my $row = $sth->fetchrow_hashref) {
+				push @queued_itemlines, $row;
+			}
 		}
 
 		if(@itemlines == 0 && @queued_itemlines == 0) {

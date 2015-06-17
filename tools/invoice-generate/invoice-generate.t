@@ -12,7 +12,7 @@ use Try::Tiny;
 use DateTime;
 
 my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errstr;
-plan tests => 45;
+plan tests => 47;
 
 require_ok("invoice-generate.pl");
 
@@ -346,6 +346,19 @@ $sim = create_sim($lim, {
 	exempt_from_cost_contribution => 0,
 }, '2015-08-01');
 $phonenumber = create_phonenumber($lim, "31612345679", $sim->{'iccid'}, '2015-08-01');
+
+#####
+# Check if an invoice with everything disabled indeed returns no invoice
+undef $invoice;
+undef $exception;
+try {
+	$invoice = generate_invoice($lim, $account->{'id'}, dt('2015', '08', '25'), 0, 0, 0, 0, 0);
+} catch {
+	$exception = $_ || 1;
+};
+diag($exception) if $exception;
+ok(!$exception, "No exception thrown during generation of empty invoice");
+ok(!defined($invoice), "No invoice generated when all options were disabled");
 
 undef $invoice;
 undef $exception;
