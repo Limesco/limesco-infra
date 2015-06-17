@@ -20,6 +20,7 @@ use POSIX qw(locale_h);
 # get_account
 do '../account-change/account-change.pl' unless UNIVERSAL::can('main', "get_account");
 do '../letter-generate/letter-generate.pl' unless UNIVERSAL::can('main', "generate_tex");
+do '../balance/balance.pl';
 
 =head1 invoice-export.pl
 
@@ -208,9 +209,12 @@ Generate a .tex file using invoice information and a TeX template filename.
 sub generate_invoice_tex {
 	my ($lim, $invoice, $template) = @_;
 	my $account = get_account($lim, $invoice->{'account_id'}, $invoice->{'date'});
+	my @p_and_i = get_payments_and_invoices($lim, $account->{'id'}, $invoice->{'date'});
+	my $balance = @p_and_i ? (pop @p_and_i)->{'balance'} : 0;
 	my $objects = {
 		invoice => $invoice,
 		account => $account,
+		balance => $balance,
 	};
 	return generate_tex($lim, $objects, $template);
 }
@@ -224,9 +228,12 @@ Generate a .pdf file using invoice information and a TeX template filename.
 sub generate_invoice_pdf {
 	my ($lim, $invoice, $filename) = @_;
 	my $account = get_account($lim, $invoice->{'account_id'}, $invoice->{'date'});
+	my @p_and_i = get_payments_and_invoices($lim, $account->{'id'}, $invoice->{'date'});
+	my $balance = @p_and_i ? (pop @p_and_i)->{'balance'} : 0;
 	my $objects = {
 		invoice => $invoice,
 		account => $account,
+		balance => $balance,
 	};
 	return generate_pdf($lim, $objects, $filename);
 }

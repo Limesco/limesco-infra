@@ -135,7 +135,15 @@ Bedrag & BTW & BTW-bedrag \\
 \end{tabularx}
 
 \begin{flushright}
-Totaal incl. BTW: \textbf{\beginperl sprintf( "%.2f", $invoice->{'rounded_with_taxes'}) \endperl}
+Totaal incl. BTW: \textbf{\beginperl sprintf( "%.2f", $invoice->{'rounded_with_taxes'}) \endperl} \\
+~~~~\\
+Vorig saldo: \textbf{\beginperl sprintf( "%.2f", $balance) \endperl} \\
+Factuurbedrag: \textbf{\beginperl sprintf( "%.2f", $invoice->{'rounded_with_taxes'}) \endperl} \\
+\beginperl
+	my $to_pay = $balance - $invoice->{'rounded_with_taxes'};
+	$OUT .= sprintf("%s: \\textbf{%.2f}", $to_pay < 0 ? "Te betalen" : "Resterend saldo", $to_pay < 0 ? -$to_pay : $to_pay);
+\endperl
+
 \end{flushright}
 
 \end{document}
