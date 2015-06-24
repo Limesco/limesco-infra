@@ -200,6 +200,24 @@ sub get_invoice {
 	return $invoice;
 }
 
+sub generate_tex_objects {
+	my ($lim, $invoice) = @_;
+	my $account = get_account($lim, $invoice->{'account_id'}, $invoice->{'date'});
+	my @p_and_i = get_payments_and_invoices($lim, $account->{'id'}, $invoice->{'date'});
+	my $balance = 0;
+	foreach(@p_and_i) {
+		if($_->{'objecttype'} eq "INVOICE" && $_->{'id'} eq $invoice->{'id'}) {
+			last;
+		}
+		$balance = $_->{'balance'};
+	}
+	return {
+		invoice => $invoice,
+		account => $account,
+		balance => $balance,
+	};
+}
+
 =head3 generate_invoice_tex($lim, $invoice, $template)
 
 Generate a .tex file using invoice information and a TeX template filename.
@@ -208,15 +226,7 @@ Generate a .tex file using invoice information and a TeX template filename.
 
 sub generate_invoice_tex {
 	my ($lim, $invoice, $template) = @_;
-	my $account = get_account($lim, $invoice->{'account_id'}, $invoice->{'date'});
-	my @p_and_i = get_payments_and_invoices($lim, $account->{'id'}, $invoice->{'date'});
-	my $balance = @p_and_i ? (pop @p_and_i)->{'balance'} : 0;
-	my $objects = {
-		invoice => $invoice,
-		account => $account,
-		balance => $balance,
-	};
-	return generate_tex($lim, $objects, $template);
+	return generate_tex($lim, generate_tex_objects($lim, $invoice), $template);
 }
 
 =head3 generate_invoice_pdf($lim, $invoice, $filename)
@@ -227,15 +237,7 @@ Generate a .pdf file using invoice information and a TeX template filename.
 
 sub generate_invoice_pdf {
 	my ($lim, $invoice, $filename) = @_;
-	my $account = get_account($lim, $invoice->{'account_id'}, $invoice->{'date'});
-	my @p_and_i = get_payments_and_invoices($lim, $account->{'id'}, $invoice->{'date'});
-	my $balance = @p_and_i ? (pop @p_and_i)->{'balance'} : 0;
-	my $objects = {
-		invoice => $invoice,
-		account => $account,
-		balance => $balance,
-	};
-	return generate_pdf($lim, $objects, $filename);
+	return generate_pdf($lim, generate_tex_objects($lim, $invoice), $filename);
 }
 
 =head3 send_invoice_by_email($lim, $invoice, $invoice_template, $email_template, [$email])
@@ -248,13 +250,14 @@ sent to the invoice account.
 sub send_invoice_by_email {
 	my ($lim, $invoice, $invoice_template, $email_template, $email) = @_;
 	my $dbh = $lim->get_database_handle();
-	my $account;
+	my $objects;
 	try {
-		$account = $lim->get_account($invoice->{'account_id'});
+		$objects = generate_tex_objects($lim, $invoice);
 	} catch {
-		die sprintf("Invoice %s belongs to a nonexistant account", $invoice->{'id'});
+		die sprintf("Failed to generate objects for invoice %s: %s", $invoice->{'id'}, $_);
 	};
 
+	my $account = $objects->{'account'};
 	if(!$email) {
 		$email = $account->{'email'};
 	}
@@ -264,7 +267,7 @@ sub send_invoice_by_email {
 
 	print "Sending to $email\n";
 
-	my $pdf = generate_pdf($lim, {invoice => $invoice, account => $account}, $invoice_template);
+	my $pdf = generate_pdf($lim, $objects, $invoice_template);
 
 	my $accountname = $account->{'company_name'};
 	if(!$accountname) {
