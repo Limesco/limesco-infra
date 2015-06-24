@@ -123,12 +123,12 @@ if(!caller) {
 		try {
 			send_invoice_by_email($lim, $invoice, $template, $email_template, $email_address) if $email_address;
 		} catch {
-			warn "Failed to send invoice $invoice to address $email_address: $_\n";
+			warn "Failed to send invoice $invoice_id to address $email_address: $_\n";
 		};
 		try {
 			send_invoice_by_email($lim, $invoice, $template, $email_template, undef) if $email_owner;
 		} catch {
-			warn "Failed to send invoice $invoice to invoice account: $_\n";
+			warn "Failed to send invoice $invoice_id to invoice account: $_\n";
 		};
 	}
 
