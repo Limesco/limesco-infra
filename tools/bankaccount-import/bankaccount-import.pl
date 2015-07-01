@@ -554,7 +554,7 @@ sub targetpay_get_transactions {
 		if($counting && /^(\d+)(?:\(.*\))?,?$/) {
 			push @paymentids, $1;
 		} elsif($counting) {
-			last;
+			$counting = 0;
 		} elsif($_ eq "Betalingskenmerken:") {
 			$counting = 1;
 		}
