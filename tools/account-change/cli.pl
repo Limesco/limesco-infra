@@ -538,7 +538,7 @@ sub run_invoice {
 			return;
 		}
 		printf("Invoice ID: %s\n", $invoice->{'id'});
-		printf("Account: %s\n", cli_account_oneliner(::get_account($lim, $invoice->{'account_id'})));
+		printf("Account: %s\n", cli_account_oneliner($self->{'account'}));
 		printf("Invoice date: %s\n", $invoice->{'date'});
 		printf("Invoice creation time: %s\n", $invoice->{'creation_time'});
 		printf("----------------------------------------------------------\n");
