@@ -538,7 +538,17 @@ sub run_invoice {
 			return;
 		}
 		printf("Invoice ID: %s\n", $invoice->{'id'});
-		printf("Account: %s\n", cli_account_oneliner($self->{'account'}));
+		my $account_description;
+		if($self->{'account'}) {
+			$account_description = cli_account_oneliner($self->{'account'});
+		} else {
+			try {
+				$account_description = cli_account_oneliner(::get_account($lim, $invoice->{'account_id'}));
+			} catch {
+				$account_description = "(deleted account)";
+			};
+		}
+		printf("Account: %s\n", $account_description);
 		printf("Invoice date: %s\n", $invoice->{'date'});
 		printf("Invoice creation time: %s\n", $invoice->{'creation_time'});
 		printf("----------------------------------------------------------\n");
