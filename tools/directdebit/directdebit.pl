@@ -14,6 +14,8 @@ use Encode;
 use v5.14; # Unicode string features
 use open qw( :encoding(UTF-8) :std);
 
+do '../balance/balance.pl';
+
 =head1 directdebit.pl
 
 Usage: directdebit.pl <--collect | --generate | --authorize | --export id> [--processing-date yyyy-mm-dd] [infra-options]
@@ -73,9 +75,33 @@ if(!caller) {
 
 		my @auths = get_active_directdebit_authorizations($lim);
 		foreach my $authorization (@auths) {
-			my @invoices = select_directdebit_invoices($lim, $authorization->{'authorization_id'});
-			foreach my $invoice (@invoices) {
-				create_directdebit_transaction($lim, $authorization->{'authorization_id'}, $invoice);
+			my @p_and_i = get_payments_and_invoices($lim, $authorization->{'account_id'});
+			if(!@p_and_i) {
+				next;
+			}
+
+			my $balance = $p_and_i[$#p_and_i]{'balance'};
+			if($balance >= 0) {
+				next;
+			}
+
+			# As invoice ID, take the last invoice open
+			my $invoice_id;
+			for(reverse @p_and_i) {
+				if($_->{'objecttype'} eq "INVOICE") {
+					$invoice_id = $_->{'id'};
+					last;
+				}
+			}
+
+			try {
+				if($invoice_id) {
+					create_directdebit_transaction($lim, $authorization->{'authorization_id'}, $invoice_id, -$balance);
+				} else {
+					die "No invoices found\n";
+				}
+			} catch {
+				warn "Could not create directdebit transaction for account ID " . $authorization->{'account_id'} . ": $_\n";
 			}
 		}
 		try {
@@ -286,80 +312,38 @@ sub get_active_directdebit_authorizations {
 	return @authorizations;
 }
 
-=head3 select_directdebit_invoices($lim, $authorization)
+=head3 create_directdebit_transaction($lim, $authorization, $invoice_id, $amount)
 
-Select all invoices for the given authorization code, as long as the price is
-positive. Note: does not check if an invoice is already paid for otherwise than
-directdebit, all invoices within a given authorization are selected and
-returned unless they are already in a non-failure directdebit transaction.
-
-=cut
-
-sub select_directdebit_invoices {
-	my ($lim, $authorization) = @_;
-	my $dbh = $lim->get_database_handle();
-
-	# Find all invoices whose date is within the period of this authorization, belonging to this account
-	my $sth = $dbh->prepare("SELECT * FROM invoice WHERE"
-		." rounded_with_taxes > 0 AND"
-		." account_id = (SELECT account_id FROM account_directdebit_info WHERE authorization_id=?) AND"
-		." date <@ (SELECT period FROM account_directdebit_info WHERE authorization_id=?) AND"
-		." NOT EXISTS (SELECT invoice_id FROM directdebit_transaction WHERE invoice_id=invoice.id AND (status='SUCCESS' OR status='NEW'));");
-	$sth->execute($authorization, $authorization);
-	my @invoices;
-	while(my $invoice = $sth->fetchrow_hashref) {
-		push @invoices, $invoice;
-	}
-	return sort { $a->{'id'} cmp $b->{'id'} } @invoices;
-}
-
-=head3 create_directdebit_transaction($lim, $authorization, $invoice)
-
-Create a transaction for a given invoice. This allows the invoice to be bundled
-in a directdebit file to be sent to the bank. Returns the transaction. Throws
-an exception if the invoice amount is below zero.
+Create a transaction for a given invoice ID and amount. The invoice ID is only
+used for the description; the debited amount comes from the parameters. Returns
+the transaction. Throws an exception if the given amount is below zero.
 
 =cut
 
 sub create_directdebit_transaction {
-	my ($lim, $authorization, $invoice) = @_;
+	my ($lim, $authorization, $invoice_id, $amount) = @_;
 	my $dbh = $lim->get_database_handle();
 
-	if($invoice->{'rounded_with_taxes'} <= 0) {
-		die "Cannot create directdebit transaction for invoice amount below zero.";
+	$amount = sprintf("%.2f", $amount);
+	if($amount <= 0) {
+		die "Cannot create directdebit transaction for amounts below zero.";
+	}
+
+	if(ref($invoice_id)) {
+		$invoice_id = $invoice_id->{'id'};
 	}
 
 	# Status must be "NEW" until the transaction is claimed in a DD file
 	my $status = 'NEW';
 
-	# XXX Hack: activation costs are on an invoice, but are almost always already paid, so don't
-	# put them in a directdebit file.
-	# The right fix for this is to bookkeep the current balance of a user, put it on an invoice
-	# along with a "remaining payment" note, and only collect that remaining payment.
-	# This subroutine computes the amount of money to subtract from the total invoice price.
-	my $amount = $invoice->{'rounded_with_taxes'};
-	{
-		my $sth = $dbh->prepare("SELECT item_count, item_price FROM invoice_itemline WHERE invoice_id=? AND item_price > 10 AND description LIKE 'Activatie SIM-kaart'");
-		$sth->execute($invoice->{'id'});
-		while(my $line = $sth->fetchrow_arrayref()) {
-			if($line->[1] != 10.33060000) {
-				die "Activation price or count is off on invoice " . $invoice->{'id'};
-			}
-			$amount -= 12.50;
-		}
-	}
-	if($amount <= 0) {
-		die "Cannot create directdebit transaction for invoice amount below zero.";
-	}
-
 	my $sth = $dbh->prepare("INSERT INTO directdebit_transaction (invoice_id, authorization_id, status, amount)
 		VALUES (?, ?, ?, ?)");
-	$sth->execute($invoice->{'id'}, $authorization, $status, $amount);
+	$sth->execute($invoice_id, $authorization, $status, $amount);
 
 	my $dd_trans_id = $dbh->last_insert_id(undef, undef, undef, undef, {sequence => "directdebit_transaction_id_seq"});
 	return {
 		id => $dd_trans_id,
-		invoice_id => $invoice->{'id'},
+		invoice_id => $invoice_id,
 		authorization_id => $authorization,
 		directdebit_file_id => undef,
 		status => $status,
