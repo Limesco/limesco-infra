@@ -567,7 +567,7 @@ sub targetpay_get_transactions {
 	}
 	$date = DateTime->new(year => $year, month => $month, day => $day);
 	my %payments;
-	my $start = $date->clone->subtract(months => 1);
+	my $start = $date->clone->subtract(months => 2);
 	my $end = $date->clone->add(months => 1);
 	foreach(@paymentids) {
 		my %parameters = (
