@@ -200,7 +200,7 @@ sub get_all_directdebit {
 		$where_clause = q(BETWEEN ? AND (?::date + '1 month'::interval));
 		$params = 2;
 	}
-	$query = "SELECT df.id, df.processing_date, dt.invoice_id, invoice.rounded_without_taxes,
+	$query = "SELECT df.id, df.processing_date, dt.invoice_id, dt.amount, invoice.rounded_without_taxes,
 			invoice.rounded_with_taxes, account.first_name, account.last_name,
 			account.company_name FROM directdebit_file df
 			LEFT OUTER JOIN directdebit_transaction dt ON (df.id = dt.directdebit_file_id)
@@ -214,18 +214,8 @@ sub get_all_directdebit {
 	my $numresults = ($params == 1) ? $sth->execute($date) : $sth->execute($date, $date);
 	my $directdebit = [];
 
-	my $activation_query = "SELECT invoice_id, item_price, description FROM invoice_itemline WHERE description = 'Activatie SIM-kaart' AND invoice_id = ?";
-	my $act_sth = $dbh->prepare($activation_query);
-
 	if ($numresults > 0) {
 		while (my $row = $sth->fetchrow_hashref()) {
-		# XXX: hack-alert. Check for activation item lines and add them to the result set.
-			if ($act_sth->execute($row->{invoice_id}) > 0) {
-				$row->{activation_costs} = [];
-				while (my $act_row = $act_sth->fetchrow_hashref()) {
-					push $row->{activation_costs}, $act_row;
-				}
-			}
 			$row->{full_name} = $row->{last_name}.", ".$row->{first_name};
 			$row->{full_name} .= " (".$row->{company_name}.")" if ($row->{company_name});
 			push @{$directdebit}, $row;
@@ -249,41 +239,34 @@ sub print_directdebit {
 		my $invoice = $invoices->[$_];
 		last if (!$invoice);
 
-		my $num_actcosts = 0;
-		if ($invoice->{activation_costs}) {
-			for ( 0 .. keys $invoice->{activation_costs} ) {
-				my $act_data = $invoice->{activation_costs}[$_];
-				if ($act_data) {
-					if ($act_data->{item_price} != 10.33060000) {
-						die "print_directdebit(): invalid item_price for activation costs. Check data for invoice_id $invoice->{invoice_id}.";
-					}
-					$num_actcosts++;
-				}
+		if ($format eq "plain") {
+			printf("%s\t%s\t%8.2f\t%8.2f\t",
+				$invoice->{invoice_id},
+				$invoice->{processing_date},
+				$invoice->{rounded_without_taxes},
+				$invoice->{rounded_with_taxes});
+
+			# Display direct debit amount, if available.
+			if ($invoice->{amount}) {
+				printf("%8.2f\t", $invoice->{amount});
+			} else {
+				printf("XXXXXXX.XX\t");
 			}
+			printf("%s\n", $invoice->{full_name});
 		}
 
-		# Correct invoice amounts for activation costs
-		$invoice->{rounded_with_taxes} -= $num_actcosts*12.50 if ($num_actcosts > 0);
-		$invoice->{rounded_without_taxes} -= $num_actcosts*10.33 if ($num_actcosts > 0);
-
-		printf("%s\t%s\t%6.2f\t%6.2f\t%d\t%s\n",
-			$invoice->{invoice_id},
-			$invoice->{processing_date},
-			$invoice->{rounded_without_taxes},
-			$invoice->{rounded_with_taxes},
-			$num_actcosts,
-			$invoice->{full_name}) if ($invoice->{rounded_with_taxes} and $format eq "plain");
-
 		if ($format eq "qif") {
-			if ($invoice->{rounded_with_taxes}) {
+			if ($invoice->{amount}) {
 				printf("!Account\nN%s\nTOth A\n^\n", $invoice->{full_name});
 				print "!Type:Oth A\n";
 
-				printf("D%s\nT-%.2f\nMIncasso voor factuur %s\nSAutomatisch incasso\n\$-%.2f\n^\n",
+				printf("D%s\nT-%.2f\nMIncasso voor saldo na factuur %s\nSAutomatisch incasso\n\$-%.2f\n^\n",
 					$invoice->{processing_date},
-					$invoice->{rounded_with_taxes},
+					$invoice->{amount},
 					$invoice->{invoice_id},
-					$invoice->{rounded_with_taxes});
+					$invoice->{amount});
+			} else {
+				die "print_directdebit: there is no direct-debit amount known, disabling QIF export\n";
 			}
 		}
 	}
