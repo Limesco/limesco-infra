@@ -1200,6 +1200,9 @@ sub run_queue {
 	} elsif ($cmd eq "add") {
 		$taxrate ||= 0.21;
 
+		$taxrate =~ s/,/./g;
+		$price =~ s/,/./g;
+
 		warn "Item count must be positive.\n" if ($count < 0);
 		return if ($count < 0);
 
