@@ -5,6 +5,7 @@ use lib 'lib';
 use lib '../lib';
 use lib '../../lib';
 use Limesco;
+use Limesco::TemporalSupport;
 use Digest::MD5 qw(md5);
 use Sys::Hostname;
 use DateTime;
@@ -14,7 +15,7 @@ use Encode;
 use v5.14; # Unicode string features
 use open qw( :encoding(UTF-8) :std);
 
-do '../balance/balance.pl';
+do '../balance/balance.pl' or die $! unless $INC{'../balance/balance.pl'};
 
 =head1 directdebit.pl
 

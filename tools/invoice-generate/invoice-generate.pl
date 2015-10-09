@@ -13,6 +13,8 @@ use DateTime;
 do '../sim-change/sim-change.pl';
 do '../account-change/account-change.pl';
 
+Limesco::AccountChange->import(qw(get_account update_account));
+
 =head1 invoice-generate.pl
 
 Usage: invoice-generate.pl [infra-options] { --all-accounts | --account <accountID> [ --account <accountID> [ ... ] ] } --date <date>

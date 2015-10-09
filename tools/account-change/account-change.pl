@@ -5,8 +5,6 @@ use lib 'lib';
 use lib '../lib';
 use lib '../../lib';
 use Limesco;
-use Limesco::TemporalSupport;
-use Try::Tiny;
 
 =head1 account-change.pl
 
@@ -29,6 +27,20 @@ if(!caller) {
 		}
 	});
 }
+
+package Limesco::AccountChange;
+use strict;
+use warnings;
+no warnings 'redefine';
+use Limesco::TemporalSupport;
+use Try::Tiny;
+use Exporter;
+
+our @ISA = qw(Exporter);
+our @EXPORT_OK = qw(create_account get_account list_accounts update_account
+	delete_account account_changes_between link_speakup_account
+	get_speakup_account list_speakup_accounts unlink_speakup_account
+	speakup_account_changes_between);
 
 =head2 Methods
 

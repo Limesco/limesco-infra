@@ -9,7 +9,7 @@ use Text::Template;
 use File::Temp qw(tempfile tempdir);
 use File::Basename qw(dirname);
 use Cwd qw(realpath);
-use IPC::Run qw(run);
+use IPC::Run;
 use Try::Tiny;
 use Email::MIME;
 use Email::Sender::Transport::SMTP;
@@ -19,9 +19,9 @@ use open qw( :encoding(UTF-8) :std);
 use utf8;
 
 # get_account
-do '../account-change/account-change.pl' unless UNIVERSAL::can('main', "get_account");
-do '../sim-change/sim-change.pl' unless UNIVERSAL::can('main', "get_sim");
-do '../directdebit/directdebit.pl' unless UNIVERSAL::can("main", "generate_directdebit_authorization");
+do '../account-change/account-change.pl' unless $INC{'../account-change/account-change.pl'};
+do '../sim-change/sim-change.pl' unless $INC{'../sim-change/sim-change.pl'};
+do '../directdebit/directdebit.pl' unless $INC{'../directdebit/directdebit.pl'};
 
 =head1 letter-generate.pl
 
@@ -186,7 +186,7 @@ sub generate_pdf {
 	close $fh;
 
 	my $pdflatex_output = '';
-	run(
+	IPC::Run::run(
 		["pdflatex", "-halt-on-error", "-interaction=batchmode", "file.tex"],
 		'>', \$pdflatex_output,
 		'2>', \$pdflatex_output,

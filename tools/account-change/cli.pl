@@ -6,12 +6,10 @@ use lib '../lib';
 use lib 'lib';
 use Limesco;
 
-do 'account-change.pl' or die $!;
+do '../letter-generate/letter-generate.pl' or die $!;
 do '../sim-change/sim-change.pl' or die $!;
-do '../invoice-export/invoice-export.pl' or die $!;
-do '../directdebit/directdebit.pl' unless UNIVERSAL::can("main", "generate_directdebit_authorization") or die $!;
+do '../directdebit/directdebit.pl' or die $!;
 do '../directdebit/bic-convert.pl' or die $!;
-do '../balance/balance.pl' or die $!;
 
 my $lim = Limesco->new_from_args(\@ARGV);
 my $shell = LimescoShell->new($lim);
@@ -29,6 +27,17 @@ use Try::Tiny;
 use File::Basename qw(dirname);
 use Cwd qw(realpath);
 use base qw(Term::Shell);
+
+BEGIN {
+	do 'account-change.pl' or die $! unless $INC{'account-change.pl'};
+	do '../invoice-export/invoice-export.pl' or die $! unless $INC{'../invoice-export/invoice-export.pl'};
+	do '../balance/balance.pl' or die $! unless $INC{'../balance/balance.pl'};
+
+	Limesco::AccountChange->import(qw(get_account list_accounts link_speakup_account
+		unlink_speakup_account update_account delete_account account_changes_between));
+	Limesco::InvoiceExport->import(qw(list_invoices get_invoice generate_invoice_pdf));
+	Limesco::Balance->import(qw(get_payments_and_invoices sprintf_money));
+}
 
 sub today {
 	my @time = localtime(time);
@@ -289,7 +298,7 @@ sub cli_create_account {
 	$account->{'email'} = ask_question("E-mail address?");
 	$account->{'contribution'} = numeric_convert_if_numeric(
 		ask_question("Contribution amount (ex VAT)?"));
-	return ::create_account($self->{'lim'}, $account, $starting_date);
+	return create_account($self->{'lim'}, $account, $starting_date);
 }
 
 sub cli_create_sim {
@@ -409,7 +418,7 @@ sub run_info {
 		$what = "sim" if($self->{'sim'});
 		if(!$what) {
 			print "No account or SIM selected, listing all accounts.\n";
-			my @account = sort {$a->{'first_name'} cmp $b->{'first_name'}} ::list_accounts($lim);
+			my @account = sort {$a->{'first_name'} cmp $b->{'first_name'}} list_accounts($lim);
 			foreach my $acc (@account) {
 				print "(" . $acc->{'id'} . ")\t" . $acc->{'first_name'} . " " . $acc->{'last_name'};
 				print "\n\t(" . $acc->{'company_name'} . ")" if ($acc->{'company_name'});
@@ -486,7 +495,7 @@ sub comp_invoice {
 	my ($self, $word, $line, $start) = @_;
 	try {
 		my $accountid = $self->{'account'}{'id'} if($self->{'account'});
-		my @invoices = map { $_->{'id'} } ::list_invoices($lim, $accountid);
+		my @invoices = map { $_->{'id'} } list_invoices($lim, $accountid);
 		return grep { substr($_, 0, length($word)) eq $word } @invoices;
 	} catch {
 		warn "Failed to tab complete: $_\n";
@@ -499,7 +508,7 @@ sub run_invoice {
 		warn "Select an account to list its invoices, or give an invoice ID to dump its information.\n";
 		return;
 	} elsif(!$invoice_id) {
-		my @invoices = ::list_invoices($lim, $self->{'account'}{'id'});
+		my @invoices = list_invoices($lim, $self->{'account'}{'id'});
 		if(!@invoices) {
 			print "This account was never invoiced.\n";
 			return;
@@ -511,7 +520,7 @@ sub run_invoice {
 	} else {
 		my $invoice;
 		try {
-			$invoice = ::get_invoice($lim, $invoice_id);
+			$invoice = get_invoice($lim, $invoice_id);
 			die if(!$invoice);
 		} catch {
 			warn "Could not retrieve this invoice: $_\n";
@@ -522,7 +531,7 @@ sub run_invoice {
 			my $filename = "$invoice_id.pdf";
 			try {
 				# TODO: configuration option for invoice TeX template
-				my $pdf = ::generate_invoice_pdf($lim, $invoice, '../invoice-export/invoice-template.tex');
+				my $pdf = generate_invoice_pdf($lim, $invoice, '../invoice-export/invoice-template.tex');
 				::send_pdf_by_email($lim, $pdf, $filename, "Liminfra invoice $invoice_id",
 					"Attached to this e-mail is your requested invoice: $invoice_id.",
 					"Liminfra user", $email);
@@ -543,7 +552,7 @@ sub run_invoice {
 			$account_description = cli_account_oneliner($self->{'account'});
 		} else {
 			try {
-				$account_description = cli_account_oneliner(::get_account($lim, $invoice->{'account_id'}));
+				$account_description = cli_account_oneliner(get_account($lim, $invoice->{'account_id'}));
 			} catch {
 				$account_description = "(deleted account)";
 			};
@@ -622,9 +631,9 @@ sub run_speakup_account {
 
 		try {
 			if($command eq "link") {
-				::link_speakup_account($lim, $name, $self->{'account'}{'id'}, $date);
+				link_speakup_account($lim, $name, $self->{'account'}{'id'}, $date);
 			} else {
-				::unlink_speakup_account($lim, $name, $date);
+				unlink_speakup_account($lim, $name, $date);
 			}
 		} catch {
 			warn $_;
@@ -836,7 +845,7 @@ sub run_changes {
 	if($self->{'sim'}) {
 		@changes = ::sim_changes_between($self->{'lim'}, $self->{'sim'}{'iccid'}, $date);
 	} elsif($self->{'account'}) {
-		@changes = ::account_changes_between($self->{'lim'}, $self->{'account'}{'id'}, $date);
+		@changes = account_changes_between($self->{'lim'}, $self->{'account'}{'id'}, $date);
 	} else {
 		warn "No SIM or account selected.\n";
 		return;
@@ -986,7 +995,7 @@ sub run_commit {
 		if($self->{sim}) {
 			::update_sim($self->{lim}, $self->{sim}{iccid}, $q, $date);
 		} elsif($self->{account}) {
-			::update_account($self->{lim}, $self->{account}{id}, $q, $date);
+			update_account($self->{lim}, $self->{account}{id}, $q, $date);
 		} else {
 			die "No account? This should be impossible\n";
 			# ... because the other commands disallow scope changes when there are
@@ -1082,7 +1091,7 @@ sub run_delete {
 		::delete_sim($self->{'lim'}, $self->{'sim'}{'iccid'}, $date, $force);
 		delete $self->{'sim'};
 	} else {
-		::delete_account($self->{'lim'}, $self->{'account'}{'id'}, $date, $force);
+		delete_account($self->{'lim'}, $self->{'account'}{'id'}, $date, $force);
 		delete $self->{'account'};
 	}
 }
@@ -1252,7 +1261,7 @@ sub run_balance {
 	my ($self, $date) = @_;
 
 	if($self->{'account'}) {
-		my @p_and_i = ::get_payments_and_invoices($lim, $self->{'account'}{'id'}, $date);
+		my @p_and_i = get_payments_and_invoices($lim, $self->{'account'}{'id'}, $date);
 		foreach(@p_and_i) {
 			my $descr;
 			my $amount;
@@ -1264,7 +1273,7 @@ sub run_balance {
 				$descr = $_->{'id'};
 			}
 			printf("%s %s %40s  %s -> %s\n", lc($_->{'objecttype'}), $_->{'date'}, $descr,
-				::sprintf_money($amount), ::sprintf_money($_->{'balance'}));
+				sprintf_money($amount), sprintf_money($_->{'balance'}));
 		}
 	} else {
 		my $dbh = $lim->get_database_handle();
@@ -1279,13 +1288,13 @@ sub run_balance {
 			push @accounts, $asth->fetchrow_hashref;
 		}
 		for my $account (@accounts) {
-			my @p_and_i = ::get_payments_and_invoices($lim, $account->{'id'}, $date);
+			my @p_and_i = get_payments_and_invoices($lim, $account->{'id'}, $date);
 			my $balance = @p_and_i ? (pop @p_and_i)->{'balance'} : 0;
 			my $name = sprintf("%s %s", $account->{'first_name'}, $account->{'last_name'});
 			if($account->{'company_name'}) {
 				$name = $account->{'company_name'} . " ($name)";
 			}
-			printf("%3d %45s -> %s\n", $account->{'id'}, $name, ::sprintf_money($balance));
+			printf("%3d %45s -> %s\n", $account->{'id'}, $name, sprintf_money($balance));
 		}
 	}
 }

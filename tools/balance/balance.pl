@@ -5,10 +5,8 @@ use lib 'lib';
 use lib '../lib';
 use lib '../../lib';
 use Limesco;
-use JSON;
-use Try::Tiny;
 
-do '../invoice-export/invoice-export.pl' or die $! unless UNIVERSAL::can("main", "list_invoices");
+Limesco::Balance->import(qw(get_payments_and_invoices sprintf_money));
 
 =head1 balance.pl
 
@@ -77,6 +75,21 @@ if(!caller) {
 			printf("%3d %45s -> %s\n", $account->{'id'}, $name, sprintf_money($balance));
 		}
 	}
+}
+
+package Limesco::Balance;
+use strict;
+use warnings;
+no warnings 'redefine';
+use Exporter::Easy (
+	OK => [qw(sprintf_money list_payments get_payment get_payments_and_invoices)],
+);
+use JSON;
+use Try::Tiny;
+
+BEGIN {
+	do '../invoice-export/invoice-export.pl' or die $! unless $INC{"../invoice-export/invoice-export.pl"};
+	Limesco::InvoiceExport->import("list_invoices");
 }
 
 =head2 Methods

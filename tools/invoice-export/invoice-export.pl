@@ -7,7 +7,6 @@ use lib '../../lib';
 use Limesco;
 use Text::Template;
 use File::Temp qw(tempfile tempdir);
-use IPC::Run qw(run);
 use Try::Tiny;
 use Email::MIME;
 use Email::Sender::Transport::SMTP;
@@ -17,10 +16,13 @@ use open qw( :encoding(UTF-8) :std);
 use locale;
 use POSIX qw(locale_h);
 
-# get_account
-do '../account-change/account-change.pl' unless UNIVERSAL::can('main', "get_account");
-do '../letter-generate/letter-generate.pl' unless UNIVERSAL::can('main', "generate_tex");
-do '../balance/balance.pl';
+Limesco::InvoiceExport->import(qw(generate_invoice_tex generate_invoice_pdf send_invoice_by_email));
+
+do '../account-change/account-change.pl' unless $INC{"../account-change/account-change.pl"};
+do '../letter-generate/letter-generate.pl' unless $INC{"../letter-generate/letter-generate.pl"};
+do '../balance/balance.pl' unless $INC{"../balance/balance.pl"};
+
+Limesco::AccountChange->import(qw(get_account));
 
 =head1 invoice-export.pl
 
@@ -148,6 +150,20 @@ if(!caller) {
 	}
 }
 
+package Limesco::InvoiceExport;
+use strict;
+use warnings;
+no warnings 'redefine';
+use Exporter::Easy (
+	OK => [qw(list_invoices get_invoice generate_invoice_tex generate_invoice_pdf send_invoice_by_email)],
+);
+
+BEGIN {
+	do '../balance/balance.pl' or die $! unless $INC{"../balance/balance.pl"};
+	do '../letter-generate/letter-generate.pl' or die $! unless $INC{"../letter-generate/letter-generate.pl"};
+	Limesco::Balance->import("get_payments_and_invoices");
+}
+
 =head2 Methods
 
 =head3 list_invoices($lim, [$account_id])
@@ -202,7 +218,7 @@ sub get_invoice {
 
 sub generate_tex_objects {
 	my ($lim, $invoice) = @_;
-	my $account = get_account($lim, $invoice->{'account_id'}, $invoice->{'date'});
+	my $account = $lim->get_account($invoice->{'account_id'}, $invoice->{'date'});
 	my @p_and_i = get_payments_and_invoices($lim, $account->{'id'}, $invoice->{'date'});
 	my $balance = 0;
 	foreach(@p_and_i) {

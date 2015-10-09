@@ -16,6 +16,8 @@ plan tests => 47;
 
 require_ok("invoice-generate.pl");
 
+Limesco::AccountChange->import(@Limesco::AccountChange::EXPORT_OK);
+
 my $lim = Limesco->new_for_test($pgsql->dsn);
 my $dbh = $lim->get_database_handle();
 

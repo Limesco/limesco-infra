@@ -15,6 +15,7 @@ my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errst
 plan tests => 33;
 
 require_ok("invoice-export.pl");
+Limesco::InvoiceExport->import(@Limesco::InvoiceExport::EXPORT_OK);
 
 my $lim = Limesco->new_for_test($pgsql->dsn);
 my $dbh = $lim->get_database_handle();

@@ -15,6 +15,7 @@ my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errst
 plan tests => 105;
 
 require_ok("account-change.pl");
+Limesco::AccountChange->import(@Limesco::AccountChange::EXPORT_OK);
 
 my $lim = Limesco->new_for_test($pgsql->dsn);
 my $dbh = $lim->get_database_handle();

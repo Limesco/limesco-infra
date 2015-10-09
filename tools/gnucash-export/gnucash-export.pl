@@ -71,22 +71,6 @@ if(!caller) {
 
 =head2 Methods
 
-=head3 Generic methods
-
-=head4 get_account($lim, $account_id)
-
-Retrieve current information about account $account_id.
-
-=cut
-
-sub get_account {
-	my ($lim, $account_id) = @_;
-	my $dbh = $lim->get_database_handle();
-	my $sth = $dbh->prepare("SELECT * FROM account WHERE id=? AND period && '[today,today]';");
-	$sth->execute($account_id);
-	return $sth->fetchrow_hashref() or die "Account doesn't exist: '$account_id'\n";
-}
-
 =head3 Invoice related methods
 
 =head4 get_all_invoices($lim, $date)
@@ -116,7 +100,7 @@ sub get_all_invoices {
 
 	if ($numresults > 0) {
 		while (my $row = $sth->fetchrow_hashref()) {
-			my $account = get_account($lim, $row->{account_id});
+			my $account = $lim->get_account($row->{account_id});
 			$row->{full_name} = $account->{last_name}.", ".$account->{first_name};
 			$row->{full_name} .= " (".$account->{company_name}.")" if $account->{company_name};
 			push @{$invoices}, $row;
