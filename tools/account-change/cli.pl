@@ -34,7 +34,8 @@ BEGIN {
 	do '../balance/balance.pl' or die $! unless $INC{'../balance/balance.pl'};
 
 	Limesco::AccountChange->import(qw(get_account list_accounts link_speakup_account
-		unlink_speakup_account update_account delete_account account_changes_between));
+		unlink_speakup_account update_account delete_account account_changes_between
+		create_account));
 	Limesco::InvoiceExport->import(qw(list_invoices get_invoice generate_invoice_pdf));
 	Limesco::Balance->import(qw(get_payments_and_invoices sprintf_money));
 }
