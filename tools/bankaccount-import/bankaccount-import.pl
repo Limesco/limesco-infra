@@ -73,12 +73,15 @@ if(!caller) {
 =cut
 
 sub parse_mt940_balance {
-	my ($year, $month, $day, $balance) = $_[0] =~ /^C(\d\d)(\d\d)(\d\d)EUR([\d]+,\d\d)$/;
+	my ($d_c, $year, $month, $day, $balance) = $_[0] =~ /^([DC])(\d\d)(\d\d)(\d\d)EUR([\d]+,\d\d)$/;
 	if(!$day) {
 		die "Did not understand balance value: " . $_[0] . "\n";
 	}
 	$balance =~ s/,/./;
 	$balance += 0; # convert to number
+	if($d_c eq "D") {
+		$balance = -$balance;
+	}
 	my $date = DateTime->new(year => "20$year", month => $month, day => $day);
 	return ($date, $balance);
 }
