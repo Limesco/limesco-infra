@@ -1268,7 +1268,8 @@ sub run_balance {
 			my $amount;
 			if($_->{'objecttype'} eq "PAYMENT") {
 				$amount = $_->{'amount'};
-				$descr = lc($_->{'type'}) .  " " . $_->{'origin'};
+				my $origin = $_->{'origin'} || "(no origin)";
+				$descr = lc($_->{'type'}) .  " " . $origin;
 			} else {
 				$amount = -$_->{'rounded_with_taxes'};
 				$descr = $_->{'id'};
