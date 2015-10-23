@@ -279,8 +279,8 @@ is_deeply($invoice, {
 	currency => "EUR",
 	date => "2015-07-25",
 	creation_time => $invoice->{'creation_time'},
-	rounded_without_taxes => '42.49', # 34.7107 + 2 * 1.00 + 2 * 2,8926
-	rounded_with_taxes => '51.41',
+	rounded_without_taxes => '18.11', # 10.3306 + 2 * 1.00 + 2 * 2,8926
+	rounded_with_taxes => '21.91',
 }, "Invoice created correctly");
 
 undef $exception;
