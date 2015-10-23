@@ -16,7 +16,7 @@ use open qw( :encoding(UTF-8) :std);
 use locale;
 use POSIX qw(locale_h);
 
-Limesco::InvoiceExport->import(qw(generate_invoice_tex generate_invoice_pdf send_invoice_by_email));
+Limesco::InvoiceExport->import(qw(generate_invoice_tex generate_invoice_pdf send_invoice_by_email get_invoice));
 
 do '../account-change/account-change.pl' unless $INC{"../account-change/account-change.pl"};
 do '../letter-generate/letter-generate.pl' unless $INC{"../letter-generate/letter-generate.pl"};
