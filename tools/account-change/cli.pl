@@ -1046,7 +1046,7 @@ sub run_delete {
 	if($self->{'sim'}) {
 		@changes = ::sim_changes_between($self->{'lim'}, $self->{'sim'}{'iccid'}, $date);
 	} else {
-		@changes = ::account_changes_between($self->{'lim'}, $self->{'account'}{'id'}, $date);
+		@changes = account_changes_between($self->{'lim'}, $self->{'account'}{'id'}, $date);
 	}
 
 	my $force;
