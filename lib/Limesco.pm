@@ -8,6 +8,8 @@ use DBI;
 use DBD::Pg;
 use Try::Tiny;
 use Encode;
+use Term::Menu;
+use Limesco::Util;
 
 our $VERSION = "0.01";
 
@@ -264,6 +266,47 @@ sub get_account_period {
 	my $upper = $sth->fetchrow_arrayref()->[0];
 
 	return ($lower, $upper);
+}
+
+sub file_config {
+	my ($self) = @_;
+	my $c = $self->{'config'}{'files'};
+	if(!$c) {
+		die "Files configuration block missing in config file\n";
+	}
+	if(!$c->{'location'}) {
+		die "Missing files configuration parameters in config file\n";
+	}
+	return $c;
+}
+
+sub list_files {
+	my ($self) = @_;
+	my $location = $self->file_config()->{'location'};
+	return Limesco::Util::directory_list($location);
+}
+
+sub choose_file {
+	my ($self) = @_;
+	my @files = $self->list_files;
+	if(@files == 0) {
+		return;
+	}
+	my $prompt = new Term::Menu;
+	my $i = 0;
+	return $prompt->menu('', ["Cancel", 'c'], map { $_ => [$_, ++$i] } @files);
+}
+
+sub get_filename {
+	my ($self, $path) = @_;
+	return $self->file_config()->{'location'} . "/$path";
+}
+
+sub upload_file {
+	my ($self, $path, $contents) = @_;
+	open my $fh, ">", $self->get_filename($path) or die $!;
+	print $fh $contents;
+	close $fh;
 }
 
 1;

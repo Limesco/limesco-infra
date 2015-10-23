@@ -10,6 +10,7 @@ do '../letter-generate/letter-generate.pl' or die $!;
 do '../sim-change/sim-change.pl' or die $!;
 do '../directdebit/directdebit.pl' or die $!;
 do '../directdebit/bic-convert.pl' or die $!;
+do '../bankaccount-import/bankaccount-import.pl' or die $!;
 
 my $lim = Limesco->new_from_args(\@ARGV);
 my $shell = LimescoShell->new($lim);
@@ -1111,13 +1112,13 @@ sub smry_delete {
 }
 
 sub run_letter {
-	my ($self, $address) = @_;
+	my ($self, $type, $address) = @_;
 	if(!$self->{'account'}) {
 		warn "An account must be selected to use this command.";
 		return;
 	}
 
-	if(!$address) {
+	if(!$type || !$address) {
 		warn help_letter();
 		return;
 	}
@@ -1154,34 +1155,45 @@ sub run_letter {
 	}
 	$instancename =~ s/ /_/g;
 
-	my @templates = ("welkomstbrief", "sepamachtiging");
-	for(my $file = 0; $file < @templates; ++$file) {
-		my $template = $templates[$file];
+	if($type eq "w") {
+		$type = "welkomstbrief";
+	} elsif($type eq "s") {
+		$type = "sepamachtiging";
+	}
 
-		my $filename = sprintf("%s-%s.pdf", $template, $instancename);
-		try {
-			my $pdf = ::generate_pdf($lim, $objects, "../letter-generate/" . $template . ".tex");
+	my $filename = sprintf("%s-%s.pdf", $type, $instancename);
+	try {
+		my $pdf = ::generate_pdf($lim, $objects, "../letter-generate/" . $type . ".tex");
+		if($address =~ /^\//) {
+			$self->{'lim'}->upload_file($address . "/" . $filename, $pdf);
+		} elsif($address =~ /@/) {
 			::send_pdf_by_email($lim, $pdf, $filename, "Liminfra document",
 				"Attached to this e-mail is your requested Liminfra document.",
 				"Liminfra user", $address);
-		} catch {
-			warn "Failed to generate and send PDF for template $template: $_\n";
-		};
-	}
+		} else {
+			die "Unknown address format: $address\n";
+		}
+	} catch {
+		warn "Failed to generate and send/store PDF for type $type to $address: $_\n";
+	};
 }
 
 sub help_letter {
 	return <<HELP;
-letter [email_address]
+letter <type> <email_address | path>
 
-Send the welcome letters for the selected account to the given e-mail address.
-Account must have at least one SIM; if it has more than one, one must be
-selected using the 'sim' command.
+Send the given type letter for the selected account to the given e-mail
+address, or store it to the given path (which must start with a '/' and be a
+directory). Account must have at least one SIM; if it has more than one, one
+must be selected using the 'sim' command. Valid types are:
+
+* welkomstbrief (w)
+* sepamachtiging (s)
 HELP
 }
 
 sub smry_letter {
-	return "generate and e-mail welcome letters";
+	return "generate and send/store welcome letters";
 }
 
 sub run_queue {
@@ -1322,4 +1334,37 @@ HELP
 
 sub smry_balance {
 	return "list user's balance after invoices and payments";
+}
+
+sub run_import {
+	my ($self, $file) = @_;
+
+	if(!$file) {
+		$file = $self->{'lim'}->choose_file();
+	}
+
+	if(!$file) {
+		warn "No files to import.\n";
+		return;
+	}
+
+	my $path = $self->{'lim'}->get_filename($file);
+	if($path =~ /\.swi$/) {
+		try {
+			::import_mt940_file($lim, $path);
+		} catch {
+			warn "Failed to import MT940 file: $_\n";
+		};
+	} else {
+		warn "Unknown file format to import: $file\n";
+		return;
+	}
+}
+
+sub help_import {
+	return "";
+}
+
+sub smry_import {
+	return "import files into the database";
 }

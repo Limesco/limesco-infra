@@ -25,3 +25,6 @@ blind_cc=sjors@limesco.nl
 
 [locale]
 ;lc_numeric=nl_NL.UTF-8
+
+[files]
+location=/tmp/limesco
