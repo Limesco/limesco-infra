@@ -347,7 +347,7 @@ sub generate_invoice {
 
 	# TODO: this could go in the pricing table?
 	my $TAX_RATE = 0.21;
-	my $SIM_CARD_ACTIVATION_PRICE = 34.7107;
+	my $SIM_CARD_ACTIVATION_PRICE = 10.3306;
 	my $SIM_NO_DATA_MONTHLY_PRICE =      2.8926;
 	my $SIM_APN_500_MB_MONTHLY_PRICE =  13.8843;
 	my $SIM_APN_2000_MB_MONTHLY_PRICE = 23.8843;
