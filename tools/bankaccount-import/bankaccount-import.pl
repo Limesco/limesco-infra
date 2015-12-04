@@ -276,21 +276,19 @@ sub evaluate_transaction {
 		my $sum_price = 0;
 		foreach my $transaction (@{$file->{'transactions'}}) {
 			my $invoice_id = $transaction->{'invoice_id'};
-			# XXX HACK, 'amount' should be added to directdebit transaction table
-			my $sth = $dbh->prepare("SELECT item_count, item_price FROM invoice_itemline WHERE invoice_id=? AND item_price > 30 AND description LIKE 'Activatie SIM-kaart'");
-			$sth->execute($invoice_id);
-			my $number_of_activations = 0;
-			while(my $line = $sth->fetchrow_arrayref()) {
-				if($line->[0] != 1 || $line->[1] != 34.7107) {
-					die "Activation price or count is off on invoice $invoice_id";
-				}
-				$number_of_activations += $line->[0];
+			my $invoice_price = $transaction->{'amount'};
+			if(!defined($invoice_price)) {
+				# Until June 3 (082a99f), direct debit transactions did not have their
+				# amount stored along with them. For these transactions, it is unclear
+				# what part of the directdebit aggregate transaction belongs to this
+				# transaction. The SQL table should be updated, in those cases, to reflect
+				# the actual amount from the XML file originally sent to the bank.
+				die "Old DirectDebit transaction without amount encountered in bank transaction\n";
 			}
-			my $subtract = $number_of_activations * 42;
-			$sth = $dbh->prepare("SELECT account_id, rounded_with_taxes FROM invoice WHERE id=?");
+
+			my $sth = $dbh->prepare("SELECT account_id, rounded_with_taxes FROM invoice WHERE id=?");
 			$sth->execute($invoice_id);
 			my $invoice = $sth->fetchrow_hashref();
-			my $invoice_price = $invoice->{'rounded_with_taxes'} - $subtract;
 
 			if($invoice_price > 0) {
 				$sum_price += $invoice_price;
