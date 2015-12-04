@@ -10,6 +10,7 @@ do '../letter-generate/letter-generate.pl' or die $!;
 do '../sim-change/sim-change.pl' or die $!;
 do '../directdebit/bic-convert.pl' or die $!;
 do '../bankaccount-import/bankaccount-import.pl' or die $!;
+do '../cdr-import/cdr-import.pl' or die $!;
 
 my $lim = Limesco->new_from_args(\@ARGV);
 my $shell = LimescoShell->new($lim);
@@ -1357,6 +1358,12 @@ sub run_import {
 			::import_mt940_file($lim, $path);
 		} catch {
 			warn "Failed to import MT940 file: $_\n";
+		};
+	} elsif($path =~ /Billed\.csv$/) {
+		try {
+			::update_cdrs_from_new_format_file($lim, $path);
+		} catch {
+			warn "Failed to import updated CSV CDR file: $_\n";
 		};
 	} else {
 		warn "Unknown file format to import: $file\n";
