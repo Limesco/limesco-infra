@@ -5,15 +5,11 @@ use lib 'lib';
 use lib '../lib';
 use lib '../../lib';
 use Limesco;
-use Limesco::TemporalSupport;
-use Digest::MD5 qw(md5);
-use Sys::Hostname;
-use DateTime;
-use Try::Tiny;
-use Business::IBAN;
-use Encode;
-use v5.14; # Unicode string features
-use open qw( :encoding(UTF-8) :std);
+
+Limesco::DirectDebit->import(qw(generate_directdebit_authorization
+	get_active_directdebit_authorizations create_directdebit_transaction
+	create_directdebit_file export_directdebit_file add_directdebit_account
+	get_directdebit_file));
 
 do '../balance/balance.pl' or die $! unless $INC{'../balance/balance.pl'};
 
@@ -170,6 +166,30 @@ if(!caller) {
 	print "One of the --collect, --generate, --authorize or --export options is required.\n";
 	exit(1);
 }
+
+package Limesco::DirectDebit;
+use strict;
+use warnings;
+no warnings 'redefine';
+use Limesco::TemporalSupport;
+use Try::Tiny;
+use Exporter;
+use Digest::MD5 qw(md5);
+use Sys::Hostname;
+use DateTime;
+use Try::Tiny;
+use Business::IBAN;
+use Encode;
+use v5.14; # Unicode string features
+use open qw( :encoding(UTF-8) :std);
+
+our @ISA = qw(Exporter);
+our @EXPORT_OK = qw(generate_directdebit_authorization add_directdebit_account
+	delete_directdebit_account get_all_directdebit_authorizations
+	get_active_directdebit_authorizations create_directdebit_transaction
+	mark_directdebit_transaction get_directdebit_transaction
+	create_directdebit_file mark_directdebit_file get_directdebit_file
+	export_directdebit_file);
 
 =head2 Methods
 

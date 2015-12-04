@@ -23,6 +23,8 @@ do '../account-change/account-change.pl' unless $INC{'../account-change/account-
 do '../sim-change/sim-change.pl' unless $INC{'../sim-change/sim-change.pl'};
 do '../directdebit/directdebit.pl' unless $INC{'../directdebit/directdebit.pl'};
 
+Limesco::DirectDebit->import(qw(generate_directdebit_authorization));
+
 =head1 letter-generate.pl
 
 Usage: letter-generate.pl [infra-options] --account <findstring> [--sim <iccid>] [--template <textemplate>] [--out <filename>]

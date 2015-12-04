@@ -15,6 +15,7 @@ my $pgsql = Test::PostgreSQL->new() or plan skip_all => $Test::PostgreSQL::errst
 plan tests => 46;
 
 require_ok("directdebit.pl");
+Limesco::DirectDebit->import(@Limesco::DirectDebit::EXPORT_OK);
 require("../invoice-export/invoice-export.pl"); # for get_invoice
 
 my $lim = Limesco->new_for_test($pgsql->dsn);

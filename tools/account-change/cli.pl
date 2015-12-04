@@ -8,7 +8,6 @@ use Limesco;
 
 do '../letter-generate/letter-generate.pl' or die $!;
 do '../sim-change/sim-change.pl' or die $!;
-do '../directdebit/directdebit.pl' or die $!;
 do '../directdebit/bic-convert.pl' or die $!;
 do '../bankaccount-import/bankaccount-import.pl' or die $!;
 
@@ -33,12 +32,16 @@ BEGIN {
 	do 'account-change.pl' or die $! unless $INC{'account-change.pl'};
 	do '../invoice-export/invoice-export.pl' or die $! unless $INC{'../invoice-export/invoice-export.pl'};
 	do '../balance/balance.pl' or die $! unless $INC{'../balance/balance.pl'};
+	do '../directdebit/directdebit.pl' or die $! unless $INC{'../directdebit/directdebit.pl'};
 
 	Limesco::AccountChange->import(qw(get_account list_accounts link_speakup_account
 		unlink_speakup_account update_account delete_account account_changes_between
 		create_account));
 	Limesco::InvoiceExport->import(qw(list_invoices get_invoice generate_invoice_pdf));
 	Limesco::Balance->import(qw(get_payments_and_invoices sprintf_money));
+	Limesco::DirectDebit->import(qw(generate_directdebit_authorization add_directdebit_account
+		delete_directdebit_account get_all_directdebit_authorizations
+		get_active_directdebit_authorizations));
 }
 
 sub today {
@@ -750,7 +753,7 @@ sub cli_add_directdebit_authorization {
 	my $bic = ($confirmbic eq lc("yes")) ? $proposedbic : $confirmbic;
 	print ">>> BIC entered: ".$bic."\n";
 	my $date = ask_question("Signature date (YYYY-MM-DD)?");
-	return ::add_directdebit_account($lim, $self->{'account'}{'id'},
+	return add_directdebit_account($lim, $self->{'account'}{'id'},
 		$authorization_id, $bank_account_name, $iban, $bic, $date);
 }
 
@@ -763,7 +766,7 @@ sub cli_delete_directdebit_authorization {
 
 	local $SIG{INT} = sub { die "Interrupted\n" };
 
-	my @authorizations = ::get_active_directdebit_authorizations($lim, $self->{'account'}{'id'});
+	my @authorizations = get_active_directdebit_authorizations($lim, $self->{'account'}{'id'});
 	my $authorization_id;
 	if(@authorizations == 0) {
 		die "No authorizations to remove.\n";
@@ -786,7 +789,7 @@ sub cli_delete_directdebit_authorization {
 	});
 
 	my $enddate = ask_question("Directdebit end date?");
-	::delete_directdebit_account($self->{'lim'}, $authorization_id, $enddate);
+	delete_directdebit_account($self->{'lim'}, $authorization_id, $enddate);
 }
 
 sub run_directdebit {
@@ -797,7 +800,7 @@ sub run_directdebit {
 			warn "Must have an account selected to see its directdebit info\n";
 			return;
 		}
-		my @authorizations = ::get_all_directdebit_authorizations($lim, $self->{'account'}{'id'});
+		my @authorizations = get_all_directdebit_authorizations($lim, $self->{'account'}{'id'});
 		foreach my $row (@authorizations) {
 			printf("%s: %s\n", $row->{'authorization_id'}, format_period($row->{'period'}));
 			printf("  Bank account name: %s\n", $row->{'bank_account_name'});
@@ -806,7 +809,7 @@ sub run_directdebit {
 			printf("  Signature date: %s\n", $row->{'signature_date'});
 		}
 	} elsif($command eq "generate") {
-		print "New authorization ID: " . ::generate_directdebit_authorization($lim) . "\n";
+		print "New authorization ID: " . generate_directdebit_authorization($lim) . "\n";
 	} elsif($command eq "authorize") {
 		try {
 			cli_add_directdebit_authorization($self);
@@ -1142,7 +1145,7 @@ sub run_letter {
 
 	my @localtime = localtime;
 	my $objects = {
-		authorization => ::generate_directdebit_authorization($lim),
+		authorization => generate_directdebit_authorization($lim),
 		pwd => realpath(dirname($0)) . "/../letter-generate/",
 		account => $self->{'account'},
 		sim => $sim,

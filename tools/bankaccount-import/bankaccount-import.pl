@@ -21,6 +21,8 @@ use JSON;
 do '../directdebit/directdebit.pl' or die $!;
 do '../invoice-export/invoice-export.pl' or die $!;
 
+Limesco::DirectDebit->import(qw(get_directdebit_file mark_directdebit_file));
+
 =head1 bankaccount-import.pl
 
 Usage:
@@ -269,7 +271,7 @@ sub evaluate_transaction {
 
 	if($description =~ /^\/PREF\/(LDD-20\d\d-\d\d-\d\d-(?:FRST|RCUR)\d*)$/) {
 		my $directdebit_id = $1;
-		my $file = ::get_directdebit_file($dbh, $directdebit_id);
+		my $file = get_directdebit_file($dbh, $directdebit_id);
 		my $num_payments = 0;
 		my $sum_price = 0;
 		foreach my $transaction (@{$file->{'transactions'}}) {
@@ -316,7 +318,7 @@ sub evaluate_transaction {
 				die "OK, stopping.\n";
 			}
 		}
-		::mark_directdebit_file($dbh, $file->{'id'}, "SUCCESS");
+		mark_directdebit_file($dbh, $file->{'id'}, "SUCCESS");
 		return $num_payments;
 	}
 
