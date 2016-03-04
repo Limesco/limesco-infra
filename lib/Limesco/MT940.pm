@@ -128,19 +128,24 @@ sub parse_fields {
 		my $id = substr($line, 1, $colon - 1);
 		my $value = substr($line, $colon + 1);
 		while($offset < $length) {
-			if(substr($string, $offset, 1) ne ':') {
-				# continuation line
-				my $line_end = index($string, "\n", $offset);
-				if($line_end == -1) {
-					$value .= "\n" . substr($string, $offset);
-					$offset = $length;
-				} else {
-					$value .= "\n" . substr($string, $offset, $line_end - $offset);
-					$offset = $line_end + 1;
-				}
+			# $offset points at the start of the next line, and we're supposed to
+			# figure out whether the next line is a continuation of this one, or a
+			# new command (which must start with ':<id>:')
+			my $line_end = index($string, "\n", $offset);
+			my $line;
+			if($line_end == -1) {
+				$line = substr($string, $offset);
+				$line_end = $length;
 			} else {
+				$line = substr($string, $offset, $line_end - $offset);
+				$line_end++; # include newline
+			}
+			if($line =~ /^:\d\d[A-Z]?:/) {
+				# not a continuation line
 				last;
 			}
+			$value .= "\n$line";
+			$offset = $line_end;
 		}
 		$value =~ s/\r//g;
 		push @fields, [$id, $value];

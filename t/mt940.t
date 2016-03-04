@@ -1,4 +1,4 @@
-use Test::More tests => 16;
+use Test::More tests => 17;
 use strict;
 use warnings;
 require_ok 'Limesco::MT940';
@@ -111,3 +111,32 @@ is_deeply([Limesco::MT940->parse_from_string($mt940)],
 		statementnr => 0,
 	}],
 	"MT940 parsed from string correctly");
+
+# Testcase for T36
+$mt940 = <<EOF;
+:940:
+:20:940S150107
+:25:NL24RABO0169207587 EUR
+:28C:0
+:60F:C150106EUR000000012345,67
+:61:150107D000000010101,10N012MARF            
+NL12INGB1234567890
+:86:/MARF/12345-001/EREF/Foo Bar Baz/ORDP//NAME/floepsie
+: woepselblaat/REMI/101202/CSID/NL12ZZZ012345678900
+:62F:C150107EUR000000002244,57
+EOF
+
+is_deeply([Limesco::MT940->parse_from_string($mt940)],
+	[{
+		account => 'NL24RABO0169207587 EUR',
+		date => '940S150107',
+		start_balance => 'C150106EUR000000012345,67',
+		end_balance => 'C150107EUR000000002244,57',
+		transactions => [{
+			description => "/MARF/12345-001/EREF/Foo Bar Baz/ORDP//NAME/floepsie\n: woepselblaat/REMI/101202/CSID/NL12ZZZ012345678900",
+			transaction => "150107D000000010101,10N012MARF            \nNL12INGB1234567890",
+		}],
+		vol_balance => undef,
+		statementnr => 0,
+	}],
+	"MT940 with colon injection parsed from string correctly");
