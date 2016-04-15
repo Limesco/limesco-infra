@@ -117,7 +117,7 @@ Returns the latest schema version supported by this tool.
 =cut
 
 sub get_latest_schema_version {
-	return 12;
+	return 13;
 }
 
 =head3 update_schema_version($lim, $dbh, $version)
@@ -535,7 +535,13 @@ sub upgrade_database {
 			$current_version = 12;
 		}
 
-		if($current_version > 12) {
+		if($current_version == 12) {
+			$dbh->do("CREATE INDEX call_id_idx ON cdr (call_id);");
+			update_schema_version($lim, $dbh, 13);
+			$current_version = 13;
+		}
+
+		if($current_version > 13) {
 			die "Not implemented";
 		}
 
