@@ -17,6 +17,7 @@ use CAM::PDF;
 use CAM::PDF::PageText;
 use Text::CSV;
 use JSON;
+use URI::Encode qw(uri_encode);
 
 do '../directdebit/directdebit.pl' or die $!;
 do '../invoice-export/invoice-export.pl' or die $!;
@@ -320,7 +321,7 @@ sub evaluate_transaction {
 		return $num_payments;
 	}
 
-	if($single_line_description =~ /\/\/NAME\/[a-zA-Z ]+ (?:Derdengelden T|TargetMedia)\/.+klantnr 76992 (\d+)\s*\//i) {
+	if($single_line_description =~ /\/\/NAME\/[a-zA-Z ]+ (?:Derdengelden T|TargetMedia)\/.+klantnr 76992 (\d+)\s*(?:\/|$)/i) {
 		print "Asking for TargetPay transactions with ID $1\n";
 		my %transactions = targetpay_get_transactions($lim, $1);
 		my $num_payments = 0;
@@ -515,32 +516,35 @@ sub targetpay_get_transactions {
 	$ua->cookie_jar($cookie_jar);
 
 	# Step 1: log in
-	my $response = $ua->post($config->{'uri_base'} . '/login', {
-		returnurl => "/today",
-		submit => "+Inloggen+",
-		login_username => $config->{'username'},
-		login_password => $config->{'password'},
-	});
+	my $response = $ua->get($config->{'uri_base'} . '/auth/login');
+	my ($csrf) = $response->decoded_content =~ /name="csrf-token" content="([^"]+)">/;
+	if(!$csrf) {
+		die "TargetPay login CSRF request failed: " . $response->status_line;
+	}
 
+	$response = $ua->post($config->{'uri_base'} . '/auth/login', Content => 
+		uri_encode('_csrf='.$csrf) . '&' .
+		uri_encode('LoginForm[username]=' . $config->{'username'}) . '&' .
+		uri_encode('LoginForm[password]=' . $config->{'password'}) . '&' .
+		uri_encode('LoginForm[rememberMe]=0') . '&' .
+		uri_encode('LoginForm[rememberMe]=1') . '&' .
+		uri_encode('login-button='),
+	);
 	if($response->code != 302) {
 		die "TargetPay login token request failed: " . $response->status_line;
 	}
+	if($cookie_jar->as_string() !~ /_identity/) {
+		die "No identity found in cookies, TargetPay login request failed";
+	}
 
 	# Step 2: retrieve PDF download link for this invoice ID
-	$response = $ua->get($config->{'uri_base'} . '/invoices');
-	my $dom_tree = new HTML::DOM;
-	$dom_tree->write($response->decoded_content);
-	$dom_tree->close();
-	my ($a_link, $date);
-	foreach my $rows ($dom_tree->getElementsByTagName('tr')) {
-		my @childs = $rows->childNodes;
-		if(@childs == 7 && $childs[0]->as_text eq $invoiceid && $childs[2]->as_text eq "EUR") {
-			$a_link = $childs[0]->firstChild->getAttribute("href");
-			$date = $childs[4]->as_text;
-		}
+	$response = $ua->get($config->{'uri_base'} . '/crm/invoices/overview?product=ide&m=2&InvoiceSearch%5Bfactuurnr%5D=' . int($invoiceid));
+	if($response->code != 200) {
+		die "TargetPay invoice overview request failed: " . $response->status_line;
 	}
-	if(!$a_link || !$date) {
-		die "Did not find invoice $invoiceid on Targetpay invoices page\n";
+	my ($a_link) = $response->decoded_content =~ /href="(\/crm\/invoices\/show-invoice\?invoiceID=\d+)"/;
+	if(!$a_link) {
+		die "Failed to find PDF URI in invoice overview";
 	}
 
 	# Step 3: retrieve PDF and find payment IDs for this invoice
@@ -564,46 +568,65 @@ sub targetpay_get_transactions {
 	}
 
 	# Step 4: retrieve information on all payments
-	my ($day, $month, $year) = $date =~ /^(\d\d)-(\d\d)-(\d{4})$/;
+	my ($day, $month, $year) = $text =~ /(\d\d?) (jan|feb|maa|apr|mei|jun|jul|aug|sep|okt|nov|dec) (20\d\d)/;
 	if(!$year) {
-		die "Failed to parse TargetPay date: $date\n";
+		die "Failed to parse TargetPay date from HTTP response\n";
 	}
-	$date = DateTime->new(year => $year, month => $month, day => $day);
+	my %month = (jan => 1, feb => 2, maa => 3, apr => 4, mei => 5, jun => 6, jul => 7, aug => 8, sep => 9, okt => 10, nov => 11, dec => 12);
+	my $date = DateTime->new(year => $year, month => $month{$month}, day => $day);
 	my %payments;
-	my $start = $date->clone->subtract(months => 2);
+	my $start = $date->clone->subtract(months => 1);
 	my $end = $date->clone->add(months => 1);
-	foreach(@paymentids) {
+	foreach my $txid (@paymentids) {
 		my %parameters = (
-			sent => 1,
-			report => 52,
-			prevreport => 52,
-			salesid => $_,
-			p1d => $start->day,
-			p1m => $start->month,
-			p1y => $start->year,
-			p2d => $end->day,
-			p2m => $end->month,
-			p2y => $end->year,
-			csv => 1,
+			'OrderdetailsSearch[datetime]' => sprintf("%02d-%02d-%04d - %02d-%02d-%04d", $start->day, $start->month, $start->year, $end->day, $end->month, $end->year),
+			'OrderdetailsSearch[txid]' => $txid,
+			'OrderdetailsSearch[cname]' => '',
+			'OrderdetailsSearch[cbank]' => '',
+			'OrderdetailsSearch[cprice]' => '',
+			'OrderdetailsSearch[txdescription]' => '',
+			'OrderdetailsSearch[nietgeleverd]' => '',
+			'OrderdetailsSearch[id]' => '',
+			'product' => 'ide',
+			'm' => 2,
 		);
-		my $url = '/orderdetails?';
+		my $url = '/crm/orderdetails/overview?';
 		foreach(keys %parameters) {
-			$url .= $_ . '=' . $parameters{$_} . '&';
+			$url .= uri_encode($_) . '=' . uri_encode($parameters{$_}) . '&';
 		}
 		$response = $ua->get($config->{'uri_base'} . $url);
 		if($response->code != 200) {
 			die "TargetPay invoice information request failed: " . $response->status_line;
 		}
-		if(!$response->decoded_content) {
-			die "TargetPay invoice information request returned empty response; URI = " . $config->{'uri_base'} . $url . "\n";
+		my $dom_tree = new HTML::DOM;
+		$dom_tree->write($response->decoded_content);
+		$dom_tree->close();
+
+		my $div = $dom_tree->getElementById("order-details-container");
+		if(!$div) {
+			die "TargetPay invoice information request failed: no information for payment $txid";
 		}
-		$response = $response->decoded_content;
-		open my $csvh, '<', \$response;
-		my $csv = Text::CSV->new({
-			sep_char => ';',
-		});
-		$csv->column_names($csv->getline($csvh));
-		$payments{$_} = $csv->getline_hr($csvh);
+		my $table = $div->getElementsByTagName('table')->[0];
+		if(!$table) {
+			die "TargetPay invoice information request failed: no information for payment $txid";
+		}
+		my $tbody = $table->getElementsByTagName('tbody')->[0];
+		my $tr = $tbody->getElementsByTagName('tr')->[0];
+		my @children = $tr->childNodes;
+		my ($day, $month, $year) = $children[0]->as_text() =~ /(\d\d)-(\d\d)-(\d{4})/;
+		my $time = $children[1]->as_text();
+		my $name = $children[2]->as_text();
+		my $bankaccount = $children[3]->as_text();
+		my ($amount) = $children[4]->as_text() =~ / (\d+[,.]\d+)$/;
+		my $kenmerk = $children[5]->as_text();
+
+		$payments{$txid} = {
+			DateTime => "$year-$month-$day $time",
+			Amount => $amount,
+			Name => $name,
+			Description => $kenmerk,
+			Account => $bankaccount,
+		};
 	}
 
 	return %payments;
