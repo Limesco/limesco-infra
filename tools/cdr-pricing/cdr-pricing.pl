@@ -256,7 +256,7 @@ sub price_cdr {
 			if(country_match($cdr->{'source'}, \@europe) && country_match($cdr->{'destination'}, \@eu_or_nl)) {
 				# Calling from EU to NL/EU is limited
 				$price_per_line = 0;
-				$price_per_unit = min_bound($price_per_unit, 0.1983471074 / 60);
+				$price_per_unit = min_bound($price_per_unit, 0.00221074);
 			}
 			$cdr->{'computed_price'} = $price_per_line + $cdr->{'units'} * $price_per_unit;
 			$cdr->{'computed_cost'} = $cost_per_line + $cdr->{'units'} * $cost_per_unit;

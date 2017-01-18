@@ -322,8 +322,8 @@ sub evaluate_transaction {
 	}
 
 	if($single_line_description =~ /\/\/NAME\/[a-zA-Z ]+ (?:Derdengelden T|TargetMedia)\/.+klantnr 76992 (\d+)\s*(?:\/|$)/i) {
-		print "Asking for TargetPay transactions with ID $1\n";
-		my %transactions = targetpay_get_transactions($lim, $1);
+		print "Asking for TargetPay transactions with ID $1 for date ".$date->dmy."\n";
+		my %transactions = targetpay_get_transactions($lim, $1, $date->dmy);
 		my $num_payments = 0;
 		foreach my $payment (values %transactions) {
 			my $ymd = substr($payment->{'DateTime'}, 0, 10);
@@ -506,7 +506,7 @@ Retrieve a TargetPay transaction list for the given TargetMedia invoice ID.
 =cut
 
 sub targetpay_get_transactions {
-	my ($lim, $invoiceid) = @_;
+	my ($lim, $invoiceid, $datedmy) = @_;
 	my $config = $lim->targetpay_config();
 
 	my $cookie_jar = HTTP::Cookies->new;
@@ -538,13 +538,15 @@ sub targetpay_get_transactions {
 	}
 
 	# Step 2: retrieve PDF download link for this invoice ID
-	$response = $ua->get($config->{'uri_base'} . '/crm/invoices/overview?product=ide&m=2&InvoiceSearch%5Bfactuurnr%5D=' . int($invoiceid));
+	my $request_uri = sprintf("%s/crm/invoices/overview?product=ide&m=2&InvoiceSearch%%5Bfactuurnr%%5D=%d&InvoiceSearch%%5Bfactuurdatum%%5D=%s+-+%s",
+				$config->{'uri_base'}, int($invoiceid), $datedmy, $datedmy);
+	$response = $ua->get($request_uri);
 	if($response->code != 200) {
 		die "TargetPay invoice overview request failed: " . $response->status_line;
 	}
 	my ($a_link) = $response->decoded_content =~ /href="(\/crm\/invoices\/show-invoice\?invoiceID=\d+)"/;
 	if(!$a_link) {
-		die "Failed to find PDF URI in invoice overview";
+		die "Failed to find PDF URI in invoice overview ".$invoiceid."\n";
 	}
 
 	# Step 3: retrieve PDF and find payment IDs for this invoice
@@ -618,7 +620,7 @@ sub targetpay_get_transactions {
 		my $name = $children[2]->as_text();
 		my $bankaccount = $children[3]->as_text();
 		my ($amount) = $children[4]->as_text() =~ / (\d+[,.]\d+)$/;
-		my $kenmerk = $children[5]->as_text();
+		my $kenmerk = $children[7]->as_text();
 
 		$payments{$txid} = {
 			DateTime => "$year-$month-$day $time",
